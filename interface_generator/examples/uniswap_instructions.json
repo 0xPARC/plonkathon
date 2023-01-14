@@ -1,7 +1,0 @@
-[
-    {
-        "fun": "ethToTokenSwapInput",
-        "prefills": [],
-        "shows": [{"fun": "getEthToTokenInputPrice", "inputs": ["1"]}]
-    }
-]
