@@ -61,5 +61,5 @@ proof = prover.prove_from_witness(setup, 16, eqs, assignments)
 Verifying:
 
 ```
-assert verifier.verify_proof(setup, 16, vk, proof, [91], optimized=True)
+assert vk.verify_proof(16, proof, [91], optimized=True)
 ```

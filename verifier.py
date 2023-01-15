@@ -1,185 +1,215 @@
+import py_ecc.bn128 as b
 from utils import *
+from dataclasses import dataclass
+from setup import G1Point, G2Point
+from prover import Proof
+from compiler.program import Program
+from compiler.utils import Column
+from setup import Setup
 
-def verify_proof(setup, group_order, vk, proof, public=[], optimized=True):
-    (
-        A_pt, B_pt, C_pt, Z_pt, T1_pt, T2_pt, T3_pt, W_z_pt, W_zw_pt,
-        A_ev, B_ev, C_ev, S1_ev, S2_ev, Z_shifted_ev
-    ) = proof
+@dataclass
+class VerificationKey:
+    """Verification key"""
+    # [q_M(x)]₁ (commitment to multiplication selector polynomial)
+    Qm: G1Point
+    # [q_L(x)]₁ (commitment to left selector polynomial)
+    Ql: G1Point
+    # [q_R(x)]₁ (commitment to right selector polynomial)
+    Qr: G1Point
+    # [q_O(x)]₁ (commitment to output selector polynomial)
+    Qo: G1Point
+    # [q_C(x)]₁ (commitment to constants selector polynomial)
+    Qc: G1Point
+    # [S_σ1(x)]₁ (commitment to the first permutation polynomial S_σ1(X))
+    S1: G1Point
+    # [S_σ2(x)]₁ (commitment to the second permutation polynomial S_σ2(X))
+    S2: G1Point
+    # [S_σ3(x)]₁ (commitment to the third permutation polynomial S_σ3(X))
+    S3: G1Point
+    # [x]₂ = xH, where H is a generator of G_2
+    X_2: G2Point
+    # nth root of unity, where n is the program's group order.
+    w: f_inner
 
-    Ql_pt, Qr_pt, Qm_pt, Qo_pt, Qc_pt, S1_pt, S2_pt, S3_pt, X2 = (
-        vk["Ql"], vk["Qr"], vk["Qm"], vk["Qo"], vk["Qc"],
-        vk["S1"], vk["S2"], vk["S3"], vk["X_2"]
-    )
+    # Generate the verification key for this program with the given setup
+    @classmethod
+    def make_verification_key(cls, program: Program, setup: Setup):
+        L, R, M, O, C = program.make_gate_polynomials()
+        S = program.make_s_polynomials()
+        return cls(
+            setup.evaluations_to_point(M),
+            setup.evaluations_to_point(L),
+            setup.evaluations_to_point(R),
+            setup.evaluations_to_point(O),
+            setup.evaluations_to_point(C),
+            setup.evaluations_to_point(S[Column.LEFT]),
+            setup.evaluations_to_point(S[Column.RIGHT]),
+            setup.evaluations_to_point(S[Column.OUTPUT]),
+            setup.X2,
+            get_root_of_unity(program.group_order)
+        )
 
-    # Compute challenges (should be same as those computed by prover)
+    # Basic, easier-to-understand version of what's going on
 
-    buf = serialize_point(A_pt) + serialize_point(B_pt) + serialize_point(C_pt)
+    # Recover the commitment to the linearization polynomial R,
+    # exactly the same as what was created by the prover
+    def _verify_inner(
+        self,
+        group_order: int,
+        proof: Proof,
+        PI_ev: f_inner,
+        v: f_inner,
+        zed: f_inner,
+        alpha: f_inner,
+        beta: f_inner,
+        gamma: f_inner,
+    ) -> bool:
+        root_of_unity = get_root_of_unity(group_order)
+        ZH_ev = zed ** group_order - 1
+        L1_ev = ZH_ev / (group_order * (zed - 1))
 
-    beta = binhash_to_f_inner(keccak256(buf))
-    gamma = binhash_to_f_inner(keccak256(keccak256(buf)))
-
-    alpha = binhash_to_f_inner(keccak256(serialize_point(Z_pt)))
-
-    buf2 = serialize_point(T1_pt)+serialize_point(T2_pt)+serialize_point(T3_pt)
-    zed = binhash_to_f_inner(keccak256(buf))
-
-    buf3 = b''.join([
-        serialize_int(x) for x in
-        (A_ev, B_ev, C_ev, S1_ev, S2_ev, Z_shifted_ev)
-    ])
-    v = binhash_to_f_inner(keccak256(buf3))
-
-    # Does not need to be standardized, only needs to be unpredictable
-    u = binhash_to_f_inner(keccak256(buf + buf2 + buf3))
-
-    ZH_ev = zed ** group_order - 1
-
-    root_of_unity = get_root_of_unity(group_order)
-
-    L1_ev = (
-        (zed ** group_order - 1) /
-        (group_order * (zed - 1))
-    )
-
-    PI_ev = barycentric_eval_at_point(
-        [f_inner(-x) for x in public] +
-        [f_inner(0) for _ in range(group_order - len(public))],
-        zed
-    )
-
-    if not optimized:
-        # Basic, easier-to-understand version of what's going on
-
-        # Recover the commitment to the linearization polynomial R,
-        # exactly the same as what was created by the prover
         R_pt = ec_lincomb([
-            (Qm_pt, A_ev * B_ev),
-            (Ql_pt, A_ev),
-            (Qr_pt, B_ev), 
-            (Qo_pt, C_ev), 
+            (self.Qm, proof.a_eval * proof.b_eval),
+            (self.Ql, proof.a_eval),
+            (self.Qr, proof.b_eval),
+            (self.Qo, proof.c_eval),
             (b.G1, PI_ev),
-            (Qc_pt, 1),
-            (Z_pt, (
-                (A_ev + beta * zed + gamma) *
-                (B_ev + beta * 2 * zed + gamma) *
-                (C_ev + beta * 3 * zed + gamma) *
+            (self.Qc, 1),
+            (proof.z_1, (
+                (proof.a_eval + beta * zed + gamma) *
+                (proof.b_eval + beta * 2 * zed + gamma) *
+                (proof.c_eval + beta * 3 * zed + gamma) *
                 alpha
             )),
-            (S3_pt, (
-                -(A_ev + beta * S1_ev + gamma) * 
-                (B_ev + beta * S2_ev + gamma) *
+            (self.S3, (
+                -(proof.a_eval + beta * proof.s1_eval + gamma) *
+                (proof.b_eval + beta * proof.s2_eval + gamma) *
                 beta *
-                alpha * Z_shifted_ev
+                alpha * proof.z_shifted_eval
             )),
             (b.G1, (
-                -(A_ev + beta * S1_ev + gamma) * 
-                (B_ev + beta * S2_ev + gamma) *
-                (C_ev + gamma) *
-                alpha * Z_shifted_ev
+                -(proof.a_eval + beta * proof.s1_eval + gamma) *
+                (proof.b_eval + beta * proof.s2_eval + gamma) *
+                (proof.c_eval + gamma) *
+                alpha * proof.z_shifted_eval
             )),
-            (Z_pt, L1_ev * alpha ** 2),
+            (proof.z_1, L1_ev * alpha ** 2),
             (b.G1, -L1_ev * alpha ** 2),
-            (T1_pt, -ZH_ev),
-            (T2_pt, -ZH_ev * zed**group_order),
-            (T3_pt, -ZH_ev * zed**(group_order*2)),
+            (proof.t_lo_1, -ZH_ev),
+            (proof.t_mid_1, -ZH_ev * zed**group_order),
+            (proof.t_hi_1, -ZH_ev * zed**(group_order*2)),
         ])
-    
+
         print('verifier R_pt', R_pt)
-    
+
         # Verify that R(z) = 0 and the prover-provided evaluations
         # A(z), B(z), C(z), S1(z), S2(z) are all correct
         assert b.pairing(
             b.G2,
             ec_lincomb([
                 (R_pt, 1),
-                (A_pt, v),
-                (b.G1, -v * A_ev),
-                (B_pt, v**2),
-                (b.G1, -v**2 * B_ev),
-                (C_pt, v**3),
-                (b.G1, -v**3 * C_ev),
-                (S1_pt, v**4),
-                (b.G1, -v**4 * S1_ev),
-                (S2_pt, v**5),
-                (b.G1, -v**5 * S2_ev),
+                (proof.a_1, v),
+                (b.G1, -v * proof.a_eval),
+                (proof.b_1, v**2),
+                (b.G1, -v**2 * proof.b_eval),
+                (proof.c_1, v**3),
+                (b.G1, -v**3 * proof.c_eval),
+                (self.S1, v**4),
+                (b.G1, -v**4 * proof.s1_eval),
+                (self.S2, v**5),
+                (b.G1, -v**5 * proof.s2_eval),
             ])
         ) == b.pairing(
-            b.add(X2, ec_mul(b.G2, -zed)),
-            W_z_pt
+            b.add(self.X_2, ec_mul(b.G2, -zed)),
+            proof.W_z_1
         )
         print("done check 1")
-    
+
         # Verify that the provided value of Z(zed*w) is correct
         assert b.pairing(
             b.G2,
             ec_lincomb([
-                (Z_pt, 1),
-                (b.G1, -Z_shifted_ev)
+                (proof.z_1, 1),
+                (b.G1, -proof.z_shifted_eval)
             ])
         ) == b.pairing(
-            b.add(X2, ec_mul(b.G2, -zed * root_of_unity)),
-            W_zw_pt
+            b.add(self.X_2, ec_mul(b.G2, -zed * root_of_unity)),
+            proof.W_zw_1
         )
         print("done check 2")
         return True
-    
-    else:
-        # More optimized version that tries hard to minimize pairings and
-        # elliptic curve multiplications, but at the cost of being harder
-        # to understand and mixing together a lot of the computations to
-        # efficiently batch them
-        
+
+    # More optimized version that tries hard to minimize pairings and
+    # elliptic curve multiplications, but at the cost of being harder
+    # to understand and mixing together a lot of the computations to
+    # efficiently batch them
+    def _optimized_verify_inner(
+        self,
+        group_order: int,
+        proof: Proof,
+        PI_ev: f_inner,
+        v: f_inner,
+        u: f_inner,
+        zed: f_inner,
+        alpha: f_inner,
+        beta: f_inner,
+        gamma: f_inner
+    ) -> bool:
+        root_of_unity = get_root_of_unity(group_order)
+        ZH_ev = zed ** group_order - 1
+        L1_ev = ZH_ev / (group_order * (zed - 1))
+
         # Compute the constant term of R. This is not literally the degree-0
         # term of the R polynomial; rather, it's the portion of R that can
         # be computed directly, without resorting to elliptic cutve commitments
         r0 = (
             PI_ev - L1_ev * alpha ** 2 - (
                 alpha *
-                (A_ev + beta * S1_ev + gamma) *
-                (B_ev + beta * S2_ev + gamma) *
-                (C_ev + gamma) *
-                Z_shifted_ev
+                (proof.a_eval + beta * proof.s1_eval + gamma) *
+                (proof.b_eval + beta * proof.s2_eval + gamma) *
+                (proof.c_eval + gamma) *
+                proof.z_shifted_eval
             )
         )
-    
+
         # D = (R - r0) + u * Z
         D_pt = ec_lincomb([
-            (Qm_pt, A_ev * B_ev),
-            (Ql_pt, A_ev),
-            (Qr_pt, B_ev), 
-            (Qo_pt, C_ev), 
-            (Qc_pt, 1),
-            (Z_pt, (
-                (A_ev + beta * zed + gamma) *
-                (B_ev + beta * 2 * zed + gamma) *
-                (C_ev + beta * 3 * zed + gamma) * alpha +
+            (self.Qm, proof.a_eval * proof.b_eval),
+            (self.Ql, proof.a_eval),
+            (self.Qr, proof.b_eval),
+            (self.Qo, proof.c_eval),
+            (self.Qc, 1),
+            (proof.z_1, (
+                (proof.a_eval + beta * zed + gamma) *
+                (proof.b_eval + beta * 2 * zed + gamma) *
+                (proof.c_eval + beta * 3 * zed + gamma) * alpha +
                 L1_ev * alpha ** 2 +
                 u
             )),
-            (S3_pt, (
-                -(A_ev + beta * S1_ev + gamma) * 
-                (B_ev + beta * S2_ev + gamma) * 
-                alpha * beta * Z_shifted_ev
+            (self.S3, (
+                -(proof.a_eval + beta * proof.s1_eval + gamma) *
+                (proof.b_eval + beta * proof.s2_eval + gamma) *
+                alpha * beta * proof.z_shifted_eval
             )),
-            (T1_pt, -ZH_ev),
-            (T2_pt, -ZH_ev * zed**group_order),
-            (T3_pt, -ZH_ev * zed**(group_order*2)),
+            (proof.t_lo_1, -ZH_ev),
+            (proof.t_mid_1, -ZH_ev * zed**group_order),
+            (proof.t_hi_1, -ZH_ev * zed**(group_order*2)),
         ])
-    
+
         F_pt = ec_lincomb([
             (D_pt, 1),
-            (A_pt, v),
-            (B_pt, v**2),
-            (C_pt, v**3),
-            (S1_pt, v**4),
-            (S2_pt, v**5),
+            (proof.a_1, v),
+            (proof.b_1, v**2),
+            (proof.c_1, v**3),
+            (self.S1, v**4),
+            (self.S2, v**5),
         ])
 
         E_pt = ec_mul(b.G1, (
-            -r0 + v * A_ev + v**2 * B_ev + v**3 * C_ev +
-            v**4 * S1_ev + v**5 * S2_ev + u * Z_shifted_ev
+            -r0 + v * proof.a_eval + v**2 * proof.b_eval + v**3 * proof.c_eval +
+            v**4 * proof.s1_eval + v**5 * proof.s2_eval + u * proof.z_shifted_eval
         ))
-    
+
         # What's going on here is a clever re-arrangement of terms to check
         # the same equations that are being checked in the basic version,
         # but in a way that minimizes the number of EC muls and even
@@ -195,15 +225,67 @@ def verify_proof(setup, group_order, vk, proof, public=[], optimized=True):
         #
         # so at this point we can take a random linear combination of the two
         # checks, and verify it with only one pairing.
-        assert b.pairing(X2, ec_lincomb([
-            (W_z_pt, 1),
-            (W_zw_pt, u)
+        assert b.pairing(self.X_2, ec_lincomb([
+            (proof.W_z_1, 1),
+            (proof.W_zw_1, u)
         ])) == b.pairing(b.G2, ec_lincomb([
-            (W_z_pt, zed),
-            (W_zw_pt, u * zed * root_of_unity),
+            (proof.W_z_1, zed),
+            (proof.W_zw_1, u * zed * root_of_unity),
             (F_pt, 1),
             (E_pt, -1)
         ]))
-    
+
         print("done combined check")
         return True
+
+    def verify_proof(self, group_order: int, proof: Proof, public=[], optimized=True) -> bool:
+        # Compute challenges (should be same as those computed by prover)
+
+        buf = serialize_point(proof.a_1) + serialize_point(proof.b_1) + serialize_point(proof.c_1)
+
+        beta = binhash_to_f_inner(keccak256(buf))
+        gamma = binhash_to_f_inner(keccak256(keccak256(buf)))
+
+        alpha = binhash_to_f_inner(keccak256(serialize_point(proof.z_1)))
+
+        buf2 = serialize_point(proof.t_lo_1)+serialize_point(proof.t_mid_1)+serialize_point(proof.t_hi_1)
+        zed = binhash_to_f_inner(keccak256(buf2))
+
+        buf3 = b''.join([
+            serialize_int(x) for x in
+            (proof.a_eval, proof.b_eval, proof.c_eval, proof.s1_eval, proof.s2_eval, proof.z_shifted_eval)
+        ])
+        v = binhash_to_f_inner(keccak256(buf3))
+
+        # Does not need to be standardized, only needs to be unpredictable
+        u = binhash_to_f_inner(keccak256(buf + buf2 + buf3))
+
+        PI_ev = barycentric_eval_at_point(
+            [f_inner(-x) for x in public] +
+            [f_inner(0) for _ in range(group_order - len(public))],
+            zed
+        )
+
+        if not optimized:
+            return self._verify_inner(
+                group_order,
+                proof,
+                PI_ev,
+                v,
+                zed,
+                alpha,
+                beta,
+                gamma,
+            )
+        else:
+            return self._optimized_verify_inner(
+                group_order,
+                proof,
+                PI_ev,
+                v,
+                u,
+                zed,
+                alpha,
+                beta,
+                gamma,
+            )

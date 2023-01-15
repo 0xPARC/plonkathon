@@ -20,7 +20,7 @@ class f_inner(Field):
 
 rc = [
     [f_inner(a), f_inner(b), f_inner(c)]
-    for (a,b,c) in json.load(open('rc.json'))
+    for (a,b,c) in json.load(open('test/poseidon_rc.json'))
 ]
 
 mds = [f_inner(1) / i for i in range(3, 8)]

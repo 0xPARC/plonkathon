@@ -2,9 +2,6 @@ import py_ecc.bn128 as b
 from py_ecc.fields.field_elements import FQ as Field
 from functools import cache
 from Crypto.Hash import keccak
-import py_ecc.bn128 as b
-from py_ecc.fields.field_elements import FQ as Field
-from multicombs import lincomb
 
 f = b.FQ
 f2 = b.FQ2
@@ -16,12 +13,12 @@ primitive_root = 5
 
 # Gets the first root of unity of a given group order
 @cache
-def get_root_of_unity(group_order):
+def get_root_of_unity(group_order) -> f_inner:
     return f_inner(5) ** ((b.curve_order - 1) // group_order)
 
 # Gets the full list of roots of unity of a given group order
 @cache
-def get_roots_of_unity(group_order):
+def get_roots_of_unity(group_order: int) -> list[f_inner]:
     o = [f_inner(1), get_root_of_unity(group_order)]
     while len(o) < group_order:
         o.append(o[-1] * o[1])
@@ -49,8 +46,8 @@ def ec_mul(pt, coeff):
 # would replace this with a fast lin-comb algo, see https://ethresear.ch/t/7238
 def ec_lincomb(pairs):
     return lincomb(
-        [pt for (pt, n) in pairs],
-        [int(n) % b.curve_order for (pt, n) in pairs],
+        [pt for (pt, _) in pairs],
+        [int(n) % b.curve_order for (_, n) in pairs],
         b.add,
         b.Z1
     )
@@ -59,68 +56,6 @@ def ec_lincomb(pairs):
     # for pt, coeff in pairs:
     #     o = b.add(o, ec_mul(pt, coeff))
     # return o
-
-# Encodes the KZG commitment to the given polynomial coeffs
-def coeffs_to_point(setup, coeffs):
-    if len(coeffs) > len(setup.G1_side):
-        raise Exception("Not enough powers in setup")
-    return ec_lincomb([(s, x) for s, x in zip(setup.G1_side, coeffs)])
-
-# Encodes the KZG commitment that evaluates to the given values in the group
-def evaluations_to_point(setup, group_order, evals):
-    return coeffs_to_point(setup, f_inner_fft(evals, inv=True))
-
-# Recover the trusted setup from a file in the format used in
-# https://github.com/iden3/snarkjs#7-prepare-phase-2
-SETUP_FILE_G1_STARTPOS = 80
-SETUP_FILE_POWERS_POS = 60
-
-class Setup(object):
-
-    def __init__(self, G1_side, X2):
-        self.G1_side = G1_side
-        self.X2 = X2
-
-    @classmethod
-    def from_file(cls, filename):
-        contents = open(filename, 'rb').read()
-        # Byte 60 gives you the base-2 log of how many powers there are
-        powers = 2**contents[SETUP_FILE_POWERS_POS]
-        # Extract G1 points, which start at byte 80
-        values = [
-            int.from_bytes(contents[i: i+32], 'little')
-            for i in range(SETUP_FILE_G1_STARTPOS,
-                           SETUP_FILE_G1_STARTPOS + 32 * powers * 2, 32)
-        ]
-        assert max(values) < b.field_modulus
-        # The points are encoded in a weird encoding, where all x and y points
-        # are multiplied by a factor (for montgomery optimization?). We can
-        # extractthe factor because we know the first point is the generator.
-        factor = f(values[0]) / b.G1[0]
-        values = [f(x) / factor for x in values]
-        G1_side = [(values[i*2], values[i*2+1]) for i in range(powers)]
-        print("Extracted G1 side, X^1 point: {}".format(G1_side[1]))
-        # Search for start of G2 points. We again know that the first point is
-        # the generator.
-        pos = SETUP_FILE_G1_STARTPOS + 32 * powers * 2
-        target = (factor * b.G2[0].coeffs[0]).n
-        while pos < len(contents):
-            v = int.from_bytes(contents[pos: pos+32], 'little')
-            if v == target:
-                break
-            pos += 1
-        print("Detected start of G2 side at byte {}".format(pos))
-        X2_encoding = contents[pos + 32 * 4: pos + 32 * 8]
-        X2_values = [
-            f(int.from_bytes(X2_encoding[i: i + 32], 'little')) / factor
-            for i in range(0, 128, 32)
-        ]
-        X2 = (f2(X2_values[:2]), f2(X2_values[2:]))
-        assert b.is_on_curve(X2, b.b2)
-        print("Extracted G2 side, X^1 point: {}".format(X2))
-        # assert b.pairing(b.G2, G1_side[1]) == b.pairing(X2, b.G1)
-        # print("X^1 points checked consistent")
-        return cls(G1_side, X2)
 
 # Extracts a point from JSON in zkrepl's format
 def interpret_json_point(p):
@@ -201,3 +136,90 @@ def barycentric_eval_at_point(values, x):
             for value, root in zip(values, roots_of_unity)
         ])
     )
+
+################################################################
+# multicombs
+################################################################
+
+import random, sys, math
+
+def multisubset(numbers, subsets, adder=lambda x,y: x+y, zero=0):
+    # Split up the numbers into partitions
+    partition_size = 1 + int(math.log(len(subsets) + 1))
+    # Align number count to partition size (for simplicity)
+    numbers = numbers[::]
+    while len(numbers) % partition_size != 0:
+        numbers.append(zero)
+    # Compute power set for each partition (eg. a, b, c -> {0, a, b, a+b, c, a+c, b+c, a+b+c})
+    power_sets = []
+    for i in range(0, len(numbers), partition_size):
+        new_power_set = [zero]
+        for dimension, value in enumerate(numbers[i:i+partition_size]):
+            new_power_set += [adder(n, value) for n in new_power_set]
+        power_sets.append(new_power_set)
+    # Compute subset sums, using elements from power set for each range of values
+    # ie. with a single power set lookup you can get the sum of _all_ elements in
+    # the range partition_size*k...partition_size*(k+1) that are in that subset
+    subset_sums = []
+    for subset in subsets:
+        o = zero
+        for i in range(len(power_sets)):
+            index_in_power_set = 0
+            for j in range(partition_size):
+                if i * partition_size + j in subset:
+                    index_in_power_set += 2 ** j
+            o = adder(o, power_sets[i][index_in_power_set])
+        subset_sums.append(o)
+    return subset_sums
+
+# Reduces a linear combination `numbers[0] * factors[0] + numbers[1] * factors[1] + ...`
+# into a multi-subset problem, and computes the result efficiently
+def lincomb(numbers, factors, adder=lambda x,y: x+y, zero=0):
+    # Maximum bit length of a number; how many subsets we need to make
+    maxbitlen = max(len(bin(f))-2 for f in factors)
+    # Compute the subsets: the ith subset contains the numbers whose corresponding factor
+    # has a 1 at the ith bit
+    subsets = [{i for i in range(len(numbers)) if factors[i] & (1 << j)} for j in range(maxbitlen+1)]
+    subset_sums = multisubset(numbers, subsets, adder=adder, zero=zero)
+    # For example, suppose a value V has factor 6 (011 in increasing-order binary). Subset 0
+    # will not have V, subset 1 will, and subset 2 will. So if we multiply the output of adding
+    # subset 0 with twice the output of adding subset 1, with four times the output of adding
+    # subset 2, then V will be represented 0 + 2 + 4 = 6 times. This reasoning applies for every
+    # value. So `subset_0_sum + 2 * subset_1_sum + 4 * subset_2_sum` gives us the result we want.
+    # Here, we compute this as `((subset_2_sum * 2) + subset_1_sum) * 2 + subset_0_sum` for
+    # efficiency: an extra `maxbitlen * 2` group operations.
+    o = zero
+    for i in range(len(subsets)-1, -1, -1):
+        o = adder(adder(o, o), subset_sums[i])
+    return o
+
+# Tests go here
+def make_mock_adder():
+    counter = [0]
+    def adder(x, y):
+        if x and y:
+            counter[0] += 1
+        return x+y
+    return adder, counter
+
+def test_multisubset(numcount, setcount):
+    numbers = [random.randrange(10**20) for _ in range(numcount)]
+    subsets = [{i for i in range(numcount) if random.randrange(2)} for i in range(setcount)]
+    adder, counter = make_mock_adder()
+    o = multisubset(numbers, subsets, adder=adder)
+    for output, subset in zip(o, subsets):
+        assert output == sum([numbers[x] for x in subset])
+
+def test_lincomb(numcount, bitlength=256):
+    numbers = [random.randrange(10**20) for _ in range(numcount)]
+    factors = [random.randrange(2**bitlength) for _ in range(numcount)]
+    adder, counter = make_mock_adder()
+    o = lincomb(numbers, factors, adder=adder)
+    assert o == sum([n*f for n,f in zip(numbers, factors)])
+    total_ones = sum(bin(f).count('1') for f in factors)
+    print("Naive operation count: %d" % (bitlength * numcount + total_ones))
+    print("Optimized operation count: %d" % (bitlength * 2 + counter[0]))
+    print("Optimization factor: %.2f" % ((bitlength * numcount + total_ones) / (bitlength * 2 + counter[0])))
+
+if __name__ == '__main__':
+    test_lincomb(int(sys.argv[1]) if len(sys.argv) >= 2 else 80)
