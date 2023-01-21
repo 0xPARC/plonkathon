@@ -13,7 +13,12 @@ The parts of PlonK that are responsible for ensuring strong privacy are left out
 A lookup argument allows us to prove that a certain element can be found in a public lookup table. [PlonKup](https://eprint.iacr.org/2022/086.pdf) introduces lookup arguments to PlonK. Try to understand the construction in the paper and implement it here.
 
 ## Getting started
-To see the proof system in action, run `python3 test.py` from the root of the repository. This will take you through the workflow of setup, proof generation, and verification for several example programs.
+
+To get started, you'll need to have a Python version >= 3.8 and [`poetry`](https://python-poetry.org) installed: `curl -sSL https://install.python-poetry.org | python3 -`.
+
+Then, run `poetry install` in the root of the repository. This will install all the dependencies in a virtualenv.
+
+Then, to see the proof system in action, run `poetry run python test.py` from the root of the repository. This will take you through the workflow of setup, proof generation, and verification for several example programs.
 ### Compiler
 #### Program
 We specify our program logic in a high-level language involving constraints and variable assignments. Here is a program that lets you prove that you know two small numbers that multiply to a given number (in our example we'll use 91) without revealing what those numbers are:
@@ -68,11 +73,11 @@ class GateWires:
 ```
 
 Examples of valid program constraints, and corresponding assembly:
-|    program constraint    |                    assembly                     |
-|--------------------------|-------------------------------------------------|
-|a === 9                   | ([None, None, 'a'], {'': 9})                    |
-|b <== a * c               | (['a', 'c', 'b'], {'a*c': 1})                   |
-|d <== a * c - 45 * a + 987| (['a', 'c', 'd'], {'a*c': 1, 'a': -45, '': 987})|
+| program constraint         | assembly                                         |
+| -------------------------- | ------------------------------------------------ |
+| a === 9                    | ([None, None, 'a'], {'': 9})                     |
+| b <== a * c                | (['a', 'c', 'b'], {'a*c': 1})                    |
+| d <== a * c - 45 * a + 987 | (['a', 'c', 'd'], {'a*c': 1, 'a': -45, '': 987}) |
 
 
 ### Setup
@@ -113,23 +118,23 @@ class Proof:
 
 The proof consists of:
 
-|           proof element          |                                              remark                                          |
-|----------------------------------|----------------------------------------------------------------------------------------------|
-|$[a(x)]_1$                        |                          commitment to left wire polynomial                                  |
-|$[b(x)]_1$                        |                          commitment to right wire polynomial                                 |
-|$[c(x)]_1$                        |                          commitment to output wire polynomial                                |
-|$[z(x)]_1$                        |                          commitment to permutation polynomial                                |
-|$[t_{lo}(x)]_1$                   |       commitment to $t_{lo}(X)$, the low chunk of the quotient polynomial $t(X)$             |
-|$[t_{mid}(x)]_1$                  |       commitment to $t_{mid}(X)$, the middle chunk of the quotient polynomial $t(X)$         |
-|$[t_{hi}(x)]_1$                   |       commitment to $t_{hi}(X)$, the high chunk of the quotient polynomial $t(X)$            |
-|$\overline{a}$                    |                         opening of $a(X)$ at evaluation challenge $\zeta$                    |
-|$\overline{b}$                    |                         opening of $b(X)$ at evaluation challenge $\zeta$                    |
-|$\overline{c}$                    |                         opening of $c(X)$ at evaluation challenge $\zeta$                    |
-|$\overline{\mathsf{s}}_{\sigma1}$ |opening of the first permutation polynomial $S_{\sigma1}(X)$ at evaluation challenge $\zeta$  |
-|$\overline{\mathsf{s}}_{\sigma2}$ |opening of the second permutation polynomial $S_{\sigma2}(X)$ at evaluation challenge $\zeta$ |
-|$\overline{z}_\omega$             |      opening of shifted permutation polynomial $z(X)$ at shifted challenge $\zeta\omega$     |
-|$[W_\zeta(X)]_1$                  |                           commitment to the opening proof polynomial                         |
-|$[W_{\zeta\omega}(X)]_1$          |                           commitment to the opening proof polynomial                         |
+| proof element                     | remark                                                                                        |
+| --------------------------------- | --------------------------------------------------------------------------------------------- |
+| $[a(x)]_1$                        | commitment to left wire polynomial                                                            |
+| $[b(x)]_1$                        | commitment to right wire polynomial                                                           |
+| $[c(x)]_1$                        | commitment to output wire polynomial                                                          |
+| $[z(x)]_1$                        | commitment to permutation polynomial                                                          |
+| $[t_{lo}(x)]_1$                   | commitment to $t_{lo}(X)$, the low chunk of the quotient polynomial $t(X)$                    |
+| $[t_{mid}(x)]_1$                  | commitment to $t_{mid}(X)$, the middle chunk of the quotient polynomial $t(X)$                |
+| $[t_{hi}(x)]_1$                   | commitment to $t_{hi}(X)$, the high chunk of the quotient polynomial $t(X)$                   |
+| $\overline{a}$                    | opening of $a(X)$ at evaluation challenge $\zeta$                                             |
+| $\overline{b}$                    | opening of $b(X)$ at evaluation challenge $\zeta$                                             |
+| $\overline{c}$                    | opening of $c(X)$ at evaluation challenge $\zeta$                                             |
+| $\overline{\mathsf{s}}_{\sigma1}$ | opening of the first permutation polynomial $S_{\sigma1}(X)$ at evaluation challenge $\zeta$  |
+| $\overline{\mathsf{s}}_{\sigma2}$ | opening of the second permutation polynomial $S_{\sigma2}(X)$ at evaluation challenge $\zeta$ |
+| $\overline{z}_\omega$             | opening of shifted permutation polynomial $z(X)$ at shifted challenge $\zeta\omega$           |
+| $[W_\zeta(X)]_1$                  | commitment to the opening proof polynomial                                                    |
+| $[W_{\zeta\omega}(X)]_1$          | commitment to the opening proof polynomial                                                    |
 
 
 ### Verifier
@@ -145,15 +150,15 @@ class VerificationKey:
 
 The `VerificationKey` contains:
 
-|     verification key element     |                            remark                                 |
-|----------------------------------|-------------------------------------------------------------------|
-|     $[q_M(x)]_1$                 |commitment to multiplication selector polynomial                   |
-|     $[q_L(x)]_1$                 |commitment to left selector polynomial                             |
-|     $[q_R(x)]_1$                 |commitment to right selector polynomial                            |
-|     $[q_O(x)]_1$                 |commitment to output selector polynomial                           |
-|     $[q_C(x)]_1$                 |commitment to constants selector polynomial                        |
-|     $[S_{\sigma1}(x)]_1$         |commitment to the first permutation polynomial $S_{\sigma1}(X)$    |
-|     $[S_{\sigma2}(x)]_1$         |commitment to the second permutation polynomial $S_{\sigma2}(X)$   |
-|     $[S_{\sigma3}(x)]_1$         |commitment to the third permutation polynomial $S_{\sigma3}(X)$    |
-|     $[x]_2 = xH$                 |(from the $\mathsf{srs}$)                                          |
-|     $\omega$                     |an $n$th root of unity, where $n$ is the program's group order.    |
+| verification key element | remark                                                           |
+| ------------------------ | ---------------------------------------------------------------- |
+| $[q_M(x)]_1$             | commitment to multiplication selector polynomial                 |
+| $[q_L(x)]_1$             | commitment to left selector polynomial                           |
+| $[q_R(x)]_1$             | commitment to right selector polynomial                          |
+| $[q_O(x)]_1$             | commitment to output selector polynomial                         |
+| $[q_C(x)]_1$             | commitment to constants selector polynomial                      |
+| $[S_{\sigma1}(x)]_1$     | commitment to the first permutation polynomial $S_{\sigma1}(X)$  |
+| $[S_{\sigma2}(x)]_1$     | commitment to the second permutation polynomial $S_{\sigma2}(X)$ |
+| $[S_{\sigma3}(x)]_1$     | commitment to the third permutation polynomial $S_{\sigma3}(X)$  |
+| $[x]_2 = xH$             | (from the $\mathsf{srs}$)                                        |
+| $\omega$                 | an $n$th root of unity, where $n$ is the program's group order.  |
