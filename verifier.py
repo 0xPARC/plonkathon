@@ -32,7 +32,7 @@ class VerificationKey:
     # [x]₂ = xH, where H is a generator of G_2
     X_2: G2Point
     # nth root of unity, where n is the program's group order.
-    w: f_inner
+    w: Scalar
 
     # Generate the verification key for this program with the given setup
     @classmethod
@@ -60,12 +60,12 @@ class VerificationKey:
         self,
         group_order: int,
         proof,
-        PI_ev: f_inner,
-        v: f_inner,
-        zed: f_inner,
-        alpha: f_inner,
-        beta: f_inner,
-        gamma: f_inner,
+        PI_ev: Scalar,
+        v: Scalar,
+        zed: Scalar,
+        alpha: Scalar,
+        beta: Scalar,
+        gamma: Scalar,
     ) -> bool:
         root_of_unity = get_root_of_unity(group_order)
         ZH_ev = zed**group_order - 1
@@ -157,13 +157,13 @@ class VerificationKey:
         self,
         group_order: int,
         proof,
-        PI_ev: f_inner,
-        v: f_inner,
-        u: f_inner,
-        zed: f_inner,
-        alpha: f_inner,
-        beta: f_inner,
-        gamma: f_inner,
+        PI_ev: Scalar,
+        v: Scalar,
+        u: Scalar,
+        zed: Scalar,
+        alpha: Scalar,
+        beta: Scalar,
+        gamma: Scalar,
     ) -> bool:
         root_of_unity = get_root_of_unity(group_order)
         ZH_ev = zed**group_order - 1
@@ -278,43 +278,43 @@ class VerificationKey:
     def verify_proof(self, group_order: int, proof, public=[], optimized=True) -> bool:
         # Compute challenges (should be same as those computed by prover)
 
-        transcript = PlonkTranscript(b'plonk')
-        transcript.append_point(b'a_1', proof["a_1"])
-        transcript.append_point(b'b_1', proof["b_1"])
-        transcript.append_point(b'c_1', proof["c_1"])
+        transcript = PlonkTranscript(b"plonk")
+        transcript.append_point(b"a_1", proof["a_1"])
+        transcript.append_point(b"b_1", proof["b_1"])
+        transcript.append_point(b"c_1", proof["c_1"])
 
-        beta = transcript.get_and_append_challenge(b'beta')
-        gamma = transcript.get_and_append_challenge(b'gamma')
+        beta = transcript.get_and_append_challenge(b"beta")
+        gamma = transcript.get_and_append_challenge(b"gamma")
 
-        transcript.append_point(b'z_1', proof["z_1"])
-        alpha = transcript.get_and_append_challenge(b'alpha')
+        transcript.append_point(b"z_1", proof["z_1"])
+        alpha = transcript.get_and_append_challenge(b"alpha")
 
-        fft_cofactor = transcript.get_and_append_challenge(b'fft_cofactor')
+        fft_cofactor = transcript.get_and_append_challenge(b"fft_cofactor")
 
-        transcript.append_point(b't_lo_1', proof["t_lo_1"])
-        transcript.append_point(b't_mid_1', proof["t_mid_1"])
-        transcript.append_point(b't_hi_1', proof["t_hi_1"])
+        transcript.append_point(b"t_lo_1", proof["t_lo_1"])
+        transcript.append_point(b"t_mid_1", proof["t_mid_1"])
+        transcript.append_point(b"t_hi_1", proof["t_hi_1"])
 
-        zed = transcript.get_and_append_challenge(b'zed')
+        zed = transcript.get_and_append_challenge(b"zed")
 
-        transcript.append_scalar(b'a_eval', proof["a_eval"])
-        transcript.append_scalar(b'b_eval', proof["b_eval"])
-        transcript.append_scalar(b'c_eval', proof["c_eval"])
-        transcript.append_scalar(b's1_eval', proof["s1_eval"])
-        transcript.append_scalar(b's2_eval', proof["s2_eval"])
-        transcript.append_scalar(b'z_shifted_eval', proof["z_shifted_eval"])
+        transcript.append_scalar(b"a_eval", proof["a_eval"])
+        transcript.append_scalar(b"b_eval", proof["b_eval"])
+        transcript.append_scalar(b"c_eval", proof["c_eval"])
+        transcript.append_scalar(b"s1_eval", proof["s1_eval"])
+        transcript.append_scalar(b"s2_eval", proof["s2_eval"])
+        transcript.append_scalar(b"z_shifted_eval", proof["z_shifted_eval"])
 
-        v = transcript.get_and_append_challenge(b'v')
+        v = transcript.get_and_append_challenge(b"v")
 
-        transcript.append_point(b'W_z_1', proof["W_z_1"])
-        transcript.append_point(b'W_zw_1', proof["W_zw_1"])
+        transcript.append_point(b"W_z_1", proof["W_z_1"])
+        transcript.append_point(b"W_zw_1", proof["W_zw_1"])
 
         # Does not need to be standardized, only needs to be unpredictable
-        u = transcript.get_and_append_challenge(b'u')
+        u = transcript.get_and_append_challenge(b"u")
 
         PI_ev = barycentric_eval_at_point(
-            [f_inner(-x) for x in public]
-            + [f_inner(0) for _ in range(group_order - len(public))],
+            [Scalar(-x) for x in public]
+            + [Scalar(0) for _ in range(group_order - len(public))],
             zed,
         )
 

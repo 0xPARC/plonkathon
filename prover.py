@@ -5,7 +5,6 @@ from setup import *
 from typing import Optional
 from dataclasses import dataclass
 from transcript import PlonkTranscript
-from curve import Scalar
 
 
 @dataclass
@@ -15,7 +14,7 @@ class Prover:
         proof = {}
 
         # Initialise Fiat-Shamir transcript
-        transcript = PlonkTranscript(b'plonk')
+        transcript = PlonkTranscript(b"plonk")
 
         # Collect fixed and public information
         self.init(program, witness)
@@ -117,13 +116,13 @@ class Prover:
             C[i] = Scalar(witness[gate_wires.O])
 
         a_1 = setup.commit(A)
-        transcript.append_point(b'a_1', a_1)
+        transcript.append_point(b"a_1", a_1)
 
         b_1 = setup.commit(B)
-        transcript.append_point(b'b_1', b_1)
+        transcript.append_point(b"b_1", b_1)
 
         c_1 = setup.commit(C)
-        transcript.append_point(b'c_1', c_1)
+        transcript.append_point(b"c_1", c_1)
 
         self.A = A
         self.B = B
@@ -151,11 +150,11 @@ class Prover:
         group_order = self.group_order
 
         # The first two Fiat-Shamir challenges
-        beta = transcript.get_and_append_challenge(b'beta')
+        beta = transcript.get_and_append_challenge(b"beta")
         transcript.beta = beta
         self.beta = beta
 
-        gamma = transcript.get_and_append_challenge(b'gamma')
+        gamma = transcript.get_and_append_challenge(b"gamma")
         transcript.gamma = gamma
         self.gamma = gamma
 
@@ -188,7 +187,7 @@ class Prover:
             ] == 0
 
         z_1 = setup.commit(Z)
-        transcript.append_point(b'z_1', z_1)
+        transcript.append_point(b"z_1", z_1)
         print("Permutation accumulator polynomial successfully generated")
 
         self.Z = Z
@@ -202,13 +201,13 @@ class Prover:
         # List of roots of unity at 4x fineness
         quarter_roots = get_roots_of_unity(group_order * 4)
 
-        alpha = transcript.get_and_append_challenge(b'alpha')
+        alpha = transcript.get_and_append_challenge(b"alpha")
         transcript.alpha = alpha
 
         # This value could be anything, it just needs to be unpredictable. Lets us
         # have evaluation forms at cosets to avoid zero evaluations, so we can
         # divide polys without the 0/0 issue
-        fft_cofactor = transcript.get_and_append_challenge(b'fft_cofactor')
+        fft_cofactor = transcript.get_and_append_challenge(b"fft_cofactor")
         transcript.fft_cofactor = fft_cofactor
         self.fft_cofactor = fft_cofactor
 
@@ -309,13 +308,13 @@ class Prover:
         print("Generated T1, T2, T3 polynomials")
 
         t_lo_1 = setup.commit(T1)
-        transcript.append_point(b't_lo_1', t_lo_1)
+        transcript.append_point(b"t_lo_1", t_lo_1)
 
         t_mid_1 = setup.commit(T2)
-        transcript.append_point(b't_mid_1', t_mid_1)
+        transcript.append_point(b"t_mid_1", t_mid_1)
 
         t_hi_1 = setup.commit(T3)
-        transcript.append_point(b't_hi_1', t_hi_1)
+        transcript.append_point(b"t_hi_1", t_hi_1)
 
         self.T1 = T1
         self.T2 = T2
@@ -326,7 +325,7 @@ class Prover:
     def round_4(self, transcript: PlonkTranscript):
         group_order = self.group_order
 
-        zed = transcript.get_and_append_challenge(b'zed')
+        zed = transcript.get_and_append_challenge(b"zed")
         transcript.zed = zed
         self.zed = zed
 
@@ -344,23 +343,23 @@ class Prover:
         # proof item once; any further multiplicands in each term need to be
         # replaced with their evaluations at Z, which do still need to be provided
         a_eval = barycentric_eval_at_point(self.A, zed)
-        transcript.append_scalar(b'a_eval', a_eval)
+        transcript.append_scalar(b"a_eval", a_eval)
 
         b_eval = barycentric_eval_at_point(self.B, zed)
-        transcript.append_scalar(b'b_eval', b_eval)
+        transcript.append_scalar(b"b_eval", b_eval)
 
         c_eval = barycentric_eval_at_point(self.C, zed)
-        transcript.append_scalar(b'c_eval', c_eval)
+        transcript.append_scalar(b"c_eval", c_eval)
 
         s1_eval = barycentric_eval_at_point(self.S1, zed)
-        transcript.append_scalar(b's1_eval', s1_eval)
+        transcript.append_scalar(b"s1_eval", s1_eval)
 
         s2_eval = barycentric_eval_at_point(self.S2, zed)
-        transcript.append_scalar(b's2_eval', s2_eval)
+        transcript.append_scalar(b"s2_eval", s2_eval)
 
         root_of_unity = get_root_of_unity(group_order)
         z_shifted_eval = barycentric_eval_at_point(self.Z, zed * root_of_unity)
-        transcript.append_scalar(b'z_shifted_eval', z_shifted_eval)
+        transcript.append_scalar(b"z_shifted_eval", z_shifted_eval)
 
         self.a_eval = a_eval
         self.b_eval = b_eval
@@ -374,7 +373,7 @@ class Prover:
     def round_5(self, transcript: PlonkTranscript, setup: Setup):
         group_order = self.group_order
 
-        v = transcript.get_and_append_challenge(b'v')
+        v = transcript.get_and_append_challenge(b"v")
         transcript.v = v
 
         assert transcript.zed is not None

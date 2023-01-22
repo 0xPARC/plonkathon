@@ -1,7 +1,7 @@
 from utils import *
 import py_ecc.bn128 as b
 from typing import NewType
-from curve import ec_lincomb, Scalar
+from curve import ec_lincomb
 
 G1Point = NewType("G1Point", tuple[b.FQ, b.FQ])
 G2Point = NewType("G2Point", tuple[b.FQ2, b.FQ2])

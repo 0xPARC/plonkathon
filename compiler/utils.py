@@ -42,7 +42,7 @@ class Cell:
 
     # Outputs the label (an inner-field element) representing a given
     # (column, row) pair. Expects section = 1 for left, 2 right, 3 output
-    def label(self, group_order: int) -> f_inner:
+    def label(self, group_order: int) -> Scalar:
         assert self.row < group_order
         return get_roots_of_unity(group_order)[self.row] * self.column.value
 
