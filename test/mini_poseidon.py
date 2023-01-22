@@ -2,8 +2,10 @@ from py_ecc.fields.field_elements import FQ as Field
 from py_ecc import bn128 as b
 import json
 
+
 class f_inner(Field):
     field_modulus = b.curve_order
+
 
 # Mimics the Poseidon hash for params:
 #
@@ -20,10 +22,11 @@ class f_inner(Field):
 
 rc = [
     [f_inner(a), f_inner(b), f_inner(c)]
-    for (a,b,c) in json.load(open('test/poseidon_rc.json'))
+    for (a, b, c) in json.load(open("test/poseidon_rc.json"))
 ]
 
 mds = [f_inner(1) / i for i in range(3, 8)]
+
 
 def poseidon_hash(in1, in2):
     L, M, R = f_inner(in1), f_inner(in2), f_inner(0)
@@ -32,8 +35,8 @@ def poseidon_hash(in1, in2):
         M += rc[i][1]
         R += rc[i][2]
         if i < 4 or i >= 60:
-            M = M ** 5
-            R = R ** 5
+            M = M**5
+            R = R**5
 
         (L, M, R) = (
             (L * mds[0] + M * mds[1] + R * mds[2]),

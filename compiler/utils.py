@@ -2,6 +2,7 @@ from utils import *
 from enum import Enum
 from dataclasses import dataclass
 
+
 class Column(Enum):
     LEFT = 1
     RIGHT = 2
@@ -15,6 +16,8 @@ class Column(Enum):
     @staticmethod
     def variants():
         return [Column.LEFT, Column.RIGHT, Column.OUTPUT]
+
+
 @dataclass
 class Cell:
     column: Column
@@ -43,13 +46,15 @@ class Cell:
         assert self.row < group_order
         return get_roots_of_unity(group_order)[self.row] * self.column.value
 
+
 # Gets the key to use in the coeffs dictionary for the term for key1*key2,
 # where key1 and key2 can be constant(''), a variable, or product keys
 # Note that degrees higher than 2 are disallowed in the compiler, but we
 # still allow them in the parser in case we find a way to compile them later
 def get_product_key(key1, key2):
-    members = sorted((key1 or '').split('*') + (key2 or '').split('*'))
-    return '*'.join([x for x in members if x])
+    members = sorted((key1 or "").split("*") + (key2 or "").split("*"))
+    return "*".join([x for x in members if x])
+
 
 def is_valid_variable_name(name: str) -> bool:
-    return len(name) > 0 and name.isalnum() and name[0] not in '0123456789'
+    return len(name) > 0 and name.isalnum() and name[0] not in "0123456789"
