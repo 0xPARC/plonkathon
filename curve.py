@@ -7,12 +7,13 @@ from dataclasses import dataclass
 
 primitive_root = 5
 
+
 class Scalar(Field):
     field_modulus = b.curve_order
 
     # Gets the first root of unity of a given group order
     @classmethod
-    def root_of_unity(cls, group_order:int):
+    def root_of_unity(cls, group_order: int):
         return Scalar(5) ** ((cls.field_modulus - 1) // group_order)
 
     # Gets the full list of roots of unity of a given group order
@@ -23,12 +24,15 @@ class Scalar(Field):
             o.append(o[-1] * o[1])
         return o
 
-Base = NewType('Base', b.FQ)
+
+Base = NewType("Base", b.FQ)
+
 
 def ec_mul(pt, coeff):
-    if hasattr(coeff, 'n'):
+    if hasattr(coeff, "n"):
         coeff = coeff.n
     return b.multiply(pt, coeff % b.curve_order)
+
 
 # Elliptic curve linear combination. A truly optimized implementation
 # would replace this with a fast lin-comb algo, see https://ethresear.ch/t/7238
@@ -37,7 +41,7 @@ def ec_lincomb(pairs):
         [pt for (pt, _) in pairs],
         [int(n) % b.curve_order for (_, n) in pairs],
         b.add,
-        b.Z1
+        b.Z1,
     )
     # Equivalent to:
     # o = b.Z1
