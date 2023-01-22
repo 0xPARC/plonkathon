@@ -293,9 +293,9 @@ class Prover:
 
         # Split up T into T1, T2 and T3 (needed because T has degree 3n, so is
         # too big for the trusted setup)
-        T1 = f_inner_fft(all_coeffs[:group_order])
-        T2 = f_inner_fft(all_coeffs[group_order : group_order * 2])
-        T3 = f_inner_fft(all_coeffs[group_order * 2 : group_order * 3])
+        T1 = fft(all_coeffs[:group_order])
+        T2 = fft(all_coeffs[group_order : group_order * 2])
+        T3 = fft(all_coeffs[group_order * 2 : group_order * 3])
 
         # Sanity check that we've computed T1, T2, T3 correctly
         assert (
@@ -436,7 +436,7 @@ class Prover:
 
         R_coeffs = self.expanded_evals_to_coeffs(R_big)
         assert R_coeffs[group_order:] == [0] * (group_order * 3)
-        R = f_inner_fft(R_coeffs[:group_order])
+        R = fft(R_coeffs[:group_order])
 
         print("R_pt", setup.commit(R))
 
@@ -476,7 +476,7 @@ class Prover:
 
         W_z_coeffs = self.expanded_evals_to_coeffs(W_z_big)
         assert W_z_coeffs[group_order:] == [0] * (group_order * 3)
-        W_z = f_inner_fft(W_z_coeffs[:group_order])
+        W_z = fft(W_z_coeffs[:group_order])
         W_z_1 = setup.commit(W_z)
 
         # Generate proof that the provided evaluation of Z(z*w) is correct. This
@@ -492,17 +492,17 @@ class Prover:
 
         W_zw_coeffs = self.expanded_evals_to_coeffs(W_zw_big)
         assert W_zw_coeffs[group_order:] == [0] * (group_order * 3)
-        W_zw = f_inner_fft(W_zw_coeffs[:group_order])
+        W_zw = fft(W_zw_coeffs[:group_order])
         W_zw_1 = setup.commit(W_zw)
 
         print("Generated final quotient witness polynomials")
         return W_z_1, W_zw_1
 
     def fft_expand(self, x):
-        return fft_expand_with_offset(x, self.fft_cofactor)
+        return coeffs_to_coset_extended_lagrange(x, self.fft_cofactor)
 
     def expanded_evals_to_coeffs(self, x):
-        return offset_evals_to_coeffs(x, self.fft_cofactor)
+        return coset_extended_lagrange_to_coeffs(x, self.fft_cofactor)
 
     def rlc(self, term_1, term_2):
         return term_1 + self.beta * term_2 + self.gamma

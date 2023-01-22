@@ -69,7 +69,7 @@ class Setup(object):
     # Encodes the KZG commitment that evaluates to the given values in the group
     def commit(self, values) -> Commitment:
         # inverse FFT from Lagrange basis to monomial basis
-        coeffs = f_inner_fft(values, inv=True)
+        coeffs = fft(values, inv=True)
         if len(coeffs) > len(self.G1_side):
             raise Exception("Not enough powers in setup")
         return ec_lincomb([(s, x) for s, x in zip(self.G1_side, coeffs)])

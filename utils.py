@@ -96,7 +96,7 @@ def _fft(vals, modulus, roots_of_unity):
 
 # Convenience method to do FFTs specifically over the subgroup over which
 # all of the proofs are operating
-def f_inner_fft(vals, inv=False):
+def fft(vals, inv=False):
     roots = [x.n for x in get_roots_of_unity(len(vals))]
     o, nvals = b.curve_order, [x.n for x in vals]
     if inv:
@@ -115,21 +115,21 @@ def f_inner_fft(vals, inv=False):
 # This lets us work with higher-degree polynomials, and the offset lets us
 # avoid the 0/0 problem when computing a division (as long as the offset is
 # chosen randomly)
-def fft_expand_with_offset(vals, offset):
+def coeffs_to_coset_extended_lagrange(vals, offset):
     group_order = len(vals)
-    x_powers = f_inner_fft(vals, inv=True)
+    x_powers = fft(vals, inv=True)
     x_powers = [(offset**i * x) for i, x in enumerate(x_powers)] + [Scalar(0)] * (
         group_order * 3
     )
-    return f_inner_fft(x_powers)
+    return fft(x_powers)
 
 
 # Convert from offset form into coefficients
-# Note that we can't make a full inverse function of fft_expand_with_offset
+# Note that we can't make a full inverse function of coeffs_to_coset_extended_lagrange
 # because the output of this might be a deg >= n polynomial, which cannot
 # be expressed via evaluations at n roots of unity
-def offset_evals_to_coeffs(evals, offset):
-    shifted_coeffs = f_inner_fft(evals, inv=True)
+def coset_extended_lagrange_to_coeffs(evals, offset):
+    shifted_coeffs = fft(evals, inv=True)
     inv_offset = 1 / offset
     return [v * inv_offset**i for (i, v) in enumerate(shifted_coeffs)]
 
