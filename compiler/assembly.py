@@ -20,11 +20,11 @@ class GateWires:
 class Gate:
     """Gate polynomial"""
 
-    L: f_inner = f_inner(0)
-    R: f_inner = f_inner(0)
-    M: f_inner = f_inner(0)
-    O: f_inner = f_inner(0)
-    C: f_inner = f_inner(0)
+    L: Scalar
+    R: Scalar
+    M: Scalar
+    O: Scalar
+    C: Scalar
 
 
 @dataclass
@@ -34,26 +34,26 @@ class AssemblyEqn:
     wires: GateWires
     coeffs: dict[Optional[str], int]
 
-    def L(self) -> f_inner:
-        return f_inner(-self.coeffs.get(self.wires.L, 0))
+    def L(self) -> Scalar:
+        return Scalar(-self.coeffs.get(self.wires.L, 0))
 
-    def R(self) -> f_inner:
+    def R(self) -> Scalar:
         if self.wires.R != self.wires.L:
-            return f_inner(-self.coeffs.get(self.wires.R, 0))
-        return f_inner(0)
+            return Scalar(-self.coeffs.get(self.wires.R, 0))
+        return Scalar(0)
 
-    def C(self) -> f_inner:
-        return f_inner(-self.coeffs.get("", 0))
+    def C(self) -> Scalar:
+        return Scalar(-self.coeffs.get("", 0))
 
-    def O(self) -> f_inner:
-        return f_inner(self.coeffs.get("$output_coeff", 1))
+    def O(self) -> Scalar:
+        return Scalar(self.coeffs.get("$output_coeff", 1))
 
-    def M(self) -> f_inner:
+    def M(self) -> Scalar:
         if None not in self.wires.as_list():
-            return f_inner(
+            return Scalar(
                 -self.coeffs.get(get_product_key(self.wires.L, self.wires.R), 0)
             )
-        return f_inner(0)
+        return Scalar(0)
 
     def gate(self) -> Gate:
         return Gate(self.L(), self.R(), self.M(), self.O(), self.C())

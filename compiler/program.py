@@ -28,7 +28,7 @@ class Program:
     def wires(self) -> list[GateWires]:
         return [constraint.wires for constraint in self.constraints]
 
-    def make_s_polynomials(self) -> dict[Column, list[Optional[f_inner]]]:
+    def make_s_polynomials(self) -> dict[Column, list[Optional[Scalar]]]:
         # For each variable, extract the list of (column, row) positions
         # where that variable is used
         variable_uses: dict[Optional[str], Set[Cell]] = {None: set()}
@@ -52,7 +52,7 @@ class Program:
         # at S[OUTPUT][2] the field element representing (LEFT, 7)
         # at S[LEFT][4] the field element representing (OUTPUT, 2)
 
-        S: dict[Column, list[Optional[f_inner]]] = {
+        S: dict[Column, list[Optional[Scalar]]] = {
             Column.LEFT: [None] * self.group_order,
             Column.RIGHT: [None] * self.group_order,
             Column.OUTPUT: [None] * self.group_order,
@@ -89,14 +89,12 @@ class Program:
     # each a list of length `group_order`
     def make_gate_polynomials(
         self,
-    ) -> tuple[
-        list[f_inner], list[f_inner], list[f_inner], list[f_inner], list[f_inner]
-    ]:
-        L = [f_inner(0) for _ in range(self.group_order)]
-        R = [f_inner(0) for _ in range(self.group_order)]
-        M = [f_inner(0) for _ in range(self.group_order)]
-        O = [f_inner(0) for _ in range(self.group_order)]
-        C = [f_inner(0) for _ in range(self.group_order)]
+    ) -> tuple[list[Scalar], list[Scalar], list[Scalar], list[Scalar], list[Scalar]]:
+        L = [Scalar(0) for _ in range(self.group_order)]
+        R = [Scalar(0) for _ in range(self.group_order)]
+        M = [Scalar(0) for _ in range(self.group_order)]
+        O = [Scalar(0) for _ in range(self.group_order)]
+        C = [Scalar(0) for _ in range(self.group_order)]
         for i, constraint in enumerate(self.constraints):
             gate = constraint.gate()
             L[i] = gate.L
@@ -113,8 +111,8 @@ class Program:
     def fill_variable_assignments(
         self, starting_assignments: dict[Optional[str], int]
     ) -> dict[Optional[str], int]:
-        out = {k: f_inner(v) for k, v in starting_assignments.items()}
-        out[None] = f_inner(0)
+        out = {k: Scalar(v) for k, v in starting_assignments.items()}
+        out[None] = Scalar(0)
         for constraint in self.constraints:
             wires = constraint.wires
             coeffs = constraint.coeffs
@@ -125,7 +123,7 @@ class Program:
             product_key = get_product_key(in_L, in_R)
             if output is not None and out_coeff in (-1, 1):
                 new_value = (
-                    f_inner(
+                    Scalar(
                         coeffs.get("", 0)
                         + out[in_L] * coeffs.get(in_L, 0)
                         + out[in_R] * coeffs.get(in_R, 0) * (1 if in_R != in_L else 0)

@@ -7,9 +7,9 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 py-ecc = "^6.0.0"
-pycryptodome = "^3.16.0"
+merlin = {git = "https://github.com/nalinbhardwaj/curdleproofs.pie", rev = "master", subdirectory = "merlin"}
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"

@@ -1,10 +1,11 @@
-from Crypto.Hash import keccak
-from typing import Optional, Union
-from curve import Scalar
+from typing import Optional
+from utils import Scalar
 from setup import G1Point
+from merlin import MerlinTranscript
+from py_ecc.secp256k1.secp256k1 import bytes_to_int
 
 
-class Transcript:
+class PlonkTranscript(MerlinTranscript):
     beta: Optional[Scalar] = None
     gamma: Optional[Scalar] = None
     alpha: Optional[Scalar] = None
@@ -12,18 +13,20 @@ class Transcript:
     zed: Optional[Scalar] = None
     v: Optional[Scalar] = None
 
-    def __init__(self):
-        self.state = keccak.new(digest_bits=256)
+    def append(self, label: bytes, item: bytes) -> None:
+        self.append_message(label, item)
 
-    def hash_scalar(self, scalar: Scalar):
-        string = scalar.n.to_bytes(32, "big")
-        self.state.update(string)
+    def append_scalar(self, label: bytes, item: Scalar):
+        self.append_message(label, item.n.to_bytes(32, "big"))
 
-    def hash_point(self, point: G1Point):
-        string = point[0].n.to_bytes(32, "big") + point[1].n.to_bytes(32, "big")
-        self.state.update(string)
+    def append_point(self, label: bytes, item: G1Point):
+        self.append_message(label, item[0].n.to_bytes(32, "big"))
+        self.append_message(label, item[1].n.to_bytes(32, "big"))
 
-    def squeeze(self):
-        digest = self.state.digest()
-        self.state = keccak.new(digest_bits=256).update(digest)
-        return Scalar(int.from_bytes(digest, "big"))
+    def get_and_append_challenge(self, label: bytes) -> Scalar:
+        while True:
+            challenge_bytes = self.challenge_bytes(label, 255)
+            f = Scalar(bytes_to_int(challenge_bytes))
+            if f != Scalar.zero():  # Enforce challenge != 0
+                self.append(label, challenge_bytes)
+                return f

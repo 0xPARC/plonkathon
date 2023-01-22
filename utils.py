@@ -1,48 +1,43 @@
 import py_ecc.bn128 as b
 from py_ecc.fields.field_elements import FQ as Field
 from functools import cache
-from Crypto.Hash import keccak
 
 f = b.FQ
 f2 = b.FQ2
 
+primitive_root = 5
 
-class f_inner(Field):
+
+class Scalar(Field):
     field_modulus = b.curve_order
 
+    # Gets the first root of unity of a given group order
+    @classmethod
+    def root_of_unity(cls, group_order: int):
+        return Scalar(5) ** ((cls.field_modulus - 1) // group_order)
 
-primitive_root = 5
+    # Gets the full list of roots of unity of a given group order
+    @classmethod
+    def roots_of_unity(cls, group_order: int):
+        o = [Scalar(1), cls.root_of_unity(group_order)]
+        while len(o) < group_order:
+            o.append(o[-1] * o[1])
+        return o
+
 
 # Gets the first root of unity of a given group order
 @cache
-def get_root_of_unity(group_order) -> f_inner:
-    return f_inner(5) ** ((b.curve_order - 1) // group_order)
+def get_root_of_unity(group_order) -> Scalar:
+    return Scalar(primitive_root) ** ((b.curve_order - 1) // group_order)
 
 
 # Gets the full list of roots of unity of a given group order
 @cache
-def get_roots_of_unity(group_order: int) -> list[f_inner]:
-    o = [f_inner(1), get_root_of_unity(group_order)]
+def get_roots_of_unity(group_order: int) -> list[Scalar]:
+    o = [Scalar(1), get_root_of_unity(group_order)]
     while len(o) < group_order:
         o.append(o[-1] * o[1])
     return o
-
-
-def keccak256(x):
-    return keccak.new(digest_bits=256).update(x).digest()
-
-
-def serialize_int(x):
-    return x.n.to_bytes(32, "big")
-
-
-def serialize_point(pt):
-    return pt[0].n.to_bytes(32, "big") + pt[1].n.to_bytes(32, "big")
-
-
-# Converts a hash to a f_inner element
-def binhash_to_f_inner(h):
-    return f_inner(int.from_bytes(h, "big"))
 
 
 def ec_mul(pt, coeff):
@@ -106,12 +101,12 @@ def f_inner_fft(vals, inv=False):
     o, nvals = b.curve_order, [x.n for x in vals]
     if inv:
         # Inverse FFT
-        invlen = f_inner(1) / len(vals)
+        invlen = Scalar(1) / len(vals)
         reversed_roots = [roots[0]] + roots[1:][::-1]
-        return [f_inner(x) * invlen for x in _fft(nvals, o, reversed_roots)]
+        return [Scalar(x) * invlen for x in _fft(nvals, o, reversed_roots)]
     else:
         # Regular FFT
-        return [f_inner(x) for x in _fft(nvals, o, roots)]
+        return [Scalar(x) for x in _fft(nvals, o, roots)]
 
 
 # Converts a list of evaluations at [1, w, w**2... w**(n-1)] to
@@ -123,7 +118,7 @@ def f_inner_fft(vals, inv=False):
 def fft_expand_with_offset(vals, offset):
     group_order = len(vals)
     x_powers = f_inner_fft(vals, inv=True)
-    x_powers = [(offset**i * x) for i, x in enumerate(x_powers)] + [f_inner(0)] * (
+    x_powers = [(offset**i * x) for i, x in enumerate(x_powers)] + [Scalar(0)] * (
         group_order * 3
     )
     return f_inner_fft(x_powers)
@@ -145,7 +140,7 @@ def barycentric_eval_at_point(values, x):
     order = len(values)
     roots_of_unity = get_roots_of_unity(order)
     return (
-        (f_inner(x) ** order - 1)
+        (Scalar(x) ** order - 1)
         / order
         * sum(
             [value * root / (x - root) for value, root in zip(values, roots_of_unity)]
