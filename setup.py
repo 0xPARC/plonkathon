@@ -1,14 +1,16 @@
 from utils import *
 import py_ecc.bn128 as b
 from typing import NewType
+from curve import ec_lincomb, Scalar
+
+G1Point = NewType('G1Point', tuple[b.FQ, b.FQ])
+G2Point = NewType('G2Point', tuple[b.FQ2, b.FQ2])
 
 # Recover the trusted setup from a file in the format used in
 # https://github.com/iden3/snarkjs#7-prepare-phase-2
 SETUP_FILE_G1_STARTPOS = 80
 SETUP_FILE_POWERS_POS = 60
-
-G1Point = NewType('G1Point', tuple[b.FQ, b.FQ])
-G2Point = NewType('G2Point', tuple[b.FQ2, b.FQ2])
+Commitment = NewType('Commitment', G1Point)
 
 class Setup(object):
     #   ([1]₁, [x]₁, ..., [x^{d-1}]₁)
@@ -62,12 +64,10 @@ class Setup(object):
         # print("X^1 points checked consistent")
         return cls(G1_side, X2)
 
-    # Encodes the KZG commitment to the given polynomial coeffs
-    def coeffs_to_point(self, coeffs):
-        if len(coeffs) > len(self.G1_side):
-            raise Exception("Not enough powers in setup")
-        return ec_lincomb([(s, x) for s, x in zip(self.G1_side, coeffs)])
-
     # Encodes the KZG commitment that evaluates to the given values in the group
-    def evaluations_to_point(self, evals):
-        return self.coeffs_to_point(f_inner_fft(evals, inv=True))
+    def commit(self, values) -> Commitment:
+        # inverse FFT from Lagrange basis to monomial basis
+        coeffs = f_inner_fft(values, inv=True)
+        if len(coeffs) > len(self.G1_side):
+                raise Exception("Not enough powers in setup")
+        return ec_lincomb([(s, x) for s, x in zip(self.G1_side, coeffs)])

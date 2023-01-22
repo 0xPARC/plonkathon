@@ -2,10 +2,11 @@ import py_ecc.bn128 as b
 from utils import *
 from dataclasses import dataclass
 from setup import G1Point, G2Point
-from prover import Proof
+from prover import Prover
 from compiler.program import Program
 from compiler.utils import Column
 from setup import Setup
+from transcript import Transcript
 
 @dataclass
 class VerificationKey:
@@ -37,14 +38,14 @@ class VerificationKey:
         L, R, M, O, C = program.make_gate_polynomials()
         S = program.make_s_polynomials()
         return cls(
-            setup.evaluations_to_point(M),
-            setup.evaluations_to_point(L),
-            setup.evaluations_to_point(R),
-            setup.evaluations_to_point(O),
-            setup.evaluations_to_point(C),
-            setup.evaluations_to_point(S[Column.LEFT]),
-            setup.evaluations_to_point(S[Column.RIGHT]),
-            setup.evaluations_to_point(S[Column.OUTPUT]),
+            setup.commit(M),
+            setup.commit(L),
+            setup.commit(R),
+            setup.commit(O),
+            setup.commit(C),
+            setup.commit(S[Column.LEFT]),
+            setup.commit(S[Column.RIGHT]),
+            setup.commit(S[Column.OUTPUT]),
             setup.X2,
             get_root_of_unity(program.group_order)
         )
@@ -56,7 +57,7 @@ class VerificationKey:
     def _verify_inner(
         self,
         group_order: int,
-        proof: Proof,
+        proof,
         PI_ev: f_inner,
         v: f_inner,
         zed: f_inner,
@@ -69,35 +70,35 @@ class VerificationKey:
         L1_ev = ZH_ev / (group_order * (zed - 1))
 
         R_pt = ec_lincomb([
-            (self.Qm, proof.a_eval * proof.b_eval),
-            (self.Ql, proof.a_eval),
-            (self.Qr, proof.b_eval),
-            (self.Qo, proof.c_eval),
+            (self.Qm, proof['a_eval'] * proof['b_eval']),
+            (self.Ql, proof['a_eval']),
+            (self.Qr, proof['b_eval']),
+            (self.Qo, proof['c_eval']),
             (b.G1, PI_ev),
             (self.Qc, 1),
-            (proof.z_1, (
-                (proof.a_eval + beta * zed + gamma) *
-                (proof.b_eval + beta * 2 * zed + gamma) *
-                (proof.c_eval + beta * 3 * zed + gamma) *
+            (proof['z_1'], (
+                (proof['a_eval'] + beta * zed + gamma) *
+                (proof['b_eval'] + beta * 2 * zed + gamma) *
+                (proof['c_eval'] + beta * 3 * zed + gamma) *
                 alpha
             )),
             (self.S3, (
-                -(proof.a_eval + beta * proof.s1_eval + gamma) *
-                (proof.b_eval + beta * proof.s2_eval + gamma) *
+                -(proof['a_eval'] + beta * proof['s1_eval'] + gamma) *
+                (proof['b_eval'] + beta * proof['s2_eval'] + gamma) *
                 beta *
-                alpha * proof.z_shifted_eval
+                alpha * proof['z_shifted_eval']
             )),
             (b.G1, (
-                -(proof.a_eval + beta * proof.s1_eval + gamma) *
-                (proof.b_eval + beta * proof.s2_eval + gamma) *
-                (proof.c_eval + gamma) *
-                alpha * proof.z_shifted_eval
+                -(proof['a_eval'] + beta * proof['s1_eval'] + gamma) *
+                (proof['b_eval'] + beta * proof['s2_eval'] + gamma) *
+                (proof['c_eval'] + gamma) *
+                alpha * proof['z_shifted_eval']
             )),
-            (proof.z_1, L1_ev * alpha ** 2),
+            (proof['z_1'], L1_ev * alpha ** 2),
             (b.G1, -L1_ev * alpha ** 2),
-            (proof.t_lo_1, -ZH_ev),
-            (proof.t_mid_1, -ZH_ev * zed**group_order),
-            (proof.t_hi_1, -ZH_ev * zed**(group_order*2)),
+            (proof['t_lo_1'], -ZH_ev),
+            (proof['t_mid_1'], -ZH_ev * zed**group_order),
+            (proof['t_hi_1'], -ZH_ev * zed**(group_order*2)),
         ])
 
         print('verifier R_pt', R_pt)
@@ -108,20 +109,20 @@ class VerificationKey:
             b.G2,
             ec_lincomb([
                 (R_pt, 1),
-                (proof.a_1, v),
-                (b.G1, -v * proof.a_eval),
-                (proof.b_1, v**2),
-                (b.G1, -v**2 * proof.b_eval),
-                (proof.c_1, v**3),
-                (b.G1, -v**3 * proof.c_eval),
+                (proof['a_1'], v),
+                (b.G1, -v * proof['a_eval']),
+                (proof['b_1'], v**2),
+                (b.G1, -v**2 * proof['b_eval']),
+                (proof['c_1'], v**3),
+                (b.G1, -v**3 * proof['c_eval']),
                 (self.S1, v**4),
-                (b.G1, -v**4 * proof.s1_eval),
+                (b.G1, -v**4 * proof['s1_eval']),
                 (self.S2, v**5),
-                (b.G1, -v**5 * proof.s2_eval),
+                (b.G1, -v**5 * proof['s2_eval']),
             ])
         ) == b.pairing(
             b.add(self.X_2, ec_mul(b.G2, -zed)),
-            proof.W_z_1
+            proof['W_z_1']
         )
         print("done check 1")
 
@@ -129,12 +130,12 @@ class VerificationKey:
         assert b.pairing(
             b.G2,
             ec_lincomb([
-                (proof.z_1, 1),
-                (b.G1, -proof.z_shifted_eval)
+                (proof['z_1'], 1),
+                (b.G1, -proof['z_shifted_eval'])
             ])
         ) == b.pairing(
             b.add(self.X_2, ec_mul(b.G2, -zed * root_of_unity)),
-            proof.W_zw_1
+            proof['W_zw_1']
         )
         print("done check 2")
         return True
@@ -146,7 +147,7 @@ class VerificationKey:
     def _optimized_verify_inner(
         self,
         group_order: int,
-        proof: Proof,
+        proof,
         PI_ev: f_inner,
         v: f_inner,
         u: f_inner,
@@ -165,49 +166,49 @@ class VerificationKey:
         r0 = (
             PI_ev - L1_ev * alpha ** 2 - (
                 alpha *
-                (proof.a_eval + beta * proof.s1_eval + gamma) *
-                (proof.b_eval + beta * proof.s2_eval + gamma) *
-                (proof.c_eval + gamma) *
-                proof.z_shifted_eval
+                (proof['a_eval'] + beta * proof['s1_eval'] + gamma) *
+                (proof['b_eval'] + beta * proof['s2_eval'] + gamma) *
+                (proof['c_eval'] + gamma) *
+                proof['z_shifted_eval']
             )
         )
 
         # D = (R - r0) + u * Z
         D_pt = ec_lincomb([
-            (self.Qm, proof.a_eval * proof.b_eval),
-            (self.Ql, proof.a_eval),
-            (self.Qr, proof.b_eval),
-            (self.Qo, proof.c_eval),
+            (self.Qm, proof['a_eval'] * proof['b_eval']),
+            (self.Ql, proof['a_eval']),
+            (self.Qr, proof['b_eval']),
+            (self.Qo, proof['c_eval']),
             (self.Qc, 1),
-            (proof.z_1, (
-                (proof.a_eval + beta * zed + gamma) *
-                (proof.b_eval + beta * 2 * zed + gamma) *
-                (proof.c_eval + beta * 3 * zed + gamma) * alpha +
+            (proof['z_1'], (
+                (proof['a_eval'] + beta * zed + gamma) *
+                (proof['b_eval'] + beta * 2 * zed + gamma) *
+                (proof['c_eval'] + beta * 3 * zed + gamma) * alpha +
                 L1_ev * alpha ** 2 +
                 u
             )),
             (self.S3, (
-                -(proof.a_eval + beta * proof.s1_eval + gamma) *
-                (proof.b_eval + beta * proof.s2_eval + gamma) *
-                alpha * beta * proof.z_shifted_eval
+                -(proof['a_eval'] + beta * proof['s1_eval'] + gamma) *
+                (proof['b_eval'] + beta * proof['s2_eval'] + gamma) *
+                alpha * beta * proof['z_shifted_eval']
             )),
-            (proof.t_lo_1, -ZH_ev),
-            (proof.t_mid_1, -ZH_ev * zed**group_order),
-            (proof.t_hi_1, -ZH_ev * zed**(group_order*2)),
+            (proof['t_lo_1'], -ZH_ev),
+            (proof['t_mid_1'], -ZH_ev * zed**group_order),
+            (proof['t_hi_1'], -ZH_ev * zed**(group_order*2)),
         ])
 
         F_pt = ec_lincomb([
             (D_pt, 1),
-            (proof.a_1, v),
-            (proof.b_1, v**2),
-            (proof.c_1, v**3),
+            (proof['a_1'], v),
+            (proof['b_1'], v**2),
+            (proof['c_1'], v**3),
             (self.S1, v**4),
             (self.S2, v**5),
         ])
 
         E_pt = ec_mul(b.G1, (
-            -r0 + v * proof.a_eval + v**2 * proof.b_eval + v**3 * proof.c_eval +
-            v**4 * proof.s1_eval + v**5 * proof.s2_eval + u * proof.z_shifted_eval
+            -r0 + v * proof['a_eval'] + v**2 * proof['b_eval'] + v**3 * proof['c_eval'] +
+            v**4 * proof['s1_eval'] + v**5 * proof['s2_eval'] + u * proof['z_shifted_eval']
         ))
 
         # What's going on here is a clever re-arrangement of terms to check
@@ -226,11 +227,11 @@ class VerificationKey:
         # so at this point we can take a random linear combination of the two
         # checks, and verify it with only one pairing.
         assert b.pairing(self.X_2, ec_lincomb([
-            (proof.W_z_1, 1),
-            (proof.W_zw_1, u)
+            (proof['W_z_1'], 1),
+            (proof['W_zw_1'], u)
         ])) == b.pairing(b.G2, ec_lincomb([
-            (proof.W_z_1, zed),
-            (proof.W_zw_1, u * zed * root_of_unity),
+            (proof['W_z_1'], zed),
+            (proof['W_zw_1'], u * zed * root_of_unity),
             (F_pt, 1),
             (E_pt, -1)
         ]))
@@ -238,27 +239,42 @@ class VerificationKey:
         print("done combined check")
         return True
 
-    def verify_proof(self, group_order: int, proof: Proof, public=[], optimized=True) -> bool:
+    def verify_proof(self, group_order: int, proof, public=[], optimized=True) -> bool:
         # Compute challenges (should be same as those computed by prover)
 
-        buf = serialize_point(proof.a_1) + serialize_point(proof.b_1) + serialize_point(proof.c_1)
+        transcript = Transcript()
+        transcript.hash_point(proof['a_1'])
+        transcript.hash_point(proof['b_1'])
+        transcript.hash_point(proof['c_1'])
 
-        beta = binhash_to_f_inner(keccak256(buf))
-        gamma = binhash_to_f_inner(keccak256(keccak256(buf)))
+        beta = transcript.squeeze()
+        gamma = transcript.squeeze()
 
-        alpha = binhash_to_f_inner(keccak256(serialize_point(proof.z_1)))
+        transcript.hash_point(proof['z_1'])
+        alpha = transcript.squeeze()
 
-        buf2 = serialize_point(proof.t_lo_1)+serialize_point(proof.t_mid_1)+serialize_point(proof.t_hi_1)
-        zed = binhash_to_f_inner(keccak256(buf2))
+        fft_cofactor = transcript.squeeze()
 
-        buf3 = b''.join([
-            serialize_int(x) for x in
-            (proof.a_eval, proof.b_eval, proof.c_eval, proof.s1_eval, proof.s2_eval, proof.z_shifted_eval)
-        ])
-        v = binhash_to_f_inner(keccak256(buf3))
+        transcript.hash_point(proof['t_lo_1'])
+        transcript.hash_point(proof['t_mid_1'])
+        transcript.hash_point(proof['t_hi_1'])
+    
+        zed = transcript.squeeze()
+
+        transcript.hash_scalar(proof['a_eval'])
+        transcript.hash_scalar(proof['b_eval'])
+        transcript.hash_scalar(proof['c_eval'])
+        transcript.hash_scalar(proof['s1_eval'])
+        transcript.hash_scalar(proof['s2_eval'])
+        transcript.hash_scalar(proof['z_shifted_eval'])
+
+        v = transcript.squeeze()
+
+        transcript.hash_point(proof['W_z_1'])
+        transcript.hash_point(proof['W_zw_1'])
 
         # Does not need to be standardized, only needs to be unpredictable
-        u = binhash_to_f_inner(keccak256(buf + buf2 + buf3))
+        u = transcript.squeeze()
 
         PI_ev = barycentric_eval_at_point(
             [f_inner(-x) for x in public] +

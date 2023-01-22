@@ -1,6 +1,6 @@
 from compiler.program import Program
 from setup import Setup
-from prover import Proof
+from prover import Prover
 from verifier import VerificationKey
 import json
 from test.mini_poseidon import rc, mds, poseidon_hash
@@ -58,7 +58,7 @@ def prover_test(setup):
     print("Beginning prover test")
     program = Program(['e public', 'c <== a * b', 'e <== c * d'], 8)
     assignments = {'a': 3, 'b': 4, 'c': 12, 'd': 5, 'e': 60}
-    return Proof.prove_from_witness(setup, program, assignments)
+    return Prover().prove(setup, program, assignments)
     print("Prover test success")
 
 def verifier_test(setup, proof):
@@ -98,7 +98,7 @@ def factorization_test(setup):
         'pb3': 1, 'pb2': 1, 'pb1': 0, 'pb0': 1,
         'qb3': 0, 'qb2': 1, 'qb1': 1, 'qb0': 1,
     })
-    proof = Proof.prove_from_witness(setup, program, assignments)
+    proof = Prover().prove(setup, program, assignments)
     print("Generated proof")
     assert vk.verify_proof(16, proof, public, optimized=True)
     print("Factorization test success!")
@@ -139,7 +139,7 @@ def poseidon_test(setup):
     assignments = program.fill_variable_assignments({'L0': 1, 'M0': 2})
     vk = VerificationKey.make_verification_key(program, setup)
     print("Generated verification key")
-    proof = Proof.prove_from_witness(setup, program, assignments)
+    proof = Prover().prove(setup, program, assignments)
     print("Generated proof")
     assert vk.verify_proof(1024, proof, [1, 2, expected_value])
     print("Verified proof!")
