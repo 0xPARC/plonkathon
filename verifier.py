@@ -6,7 +6,7 @@ from prover import Prover
 from compiler.program import Program
 from compiler.utils import Column
 from setup import Setup
-from transcript import Transcript
+from transcript import PlonkTranscript
 
 
 @dataclass
@@ -278,39 +278,39 @@ class VerificationKey:
     def verify_proof(self, group_order: int, proof, public=[], optimized=True) -> bool:
         # Compute challenges (should be same as those computed by prover)
 
-        transcript = Transcript()
-        transcript.hash_point(proof["a_1"])
-        transcript.hash_point(proof["b_1"])
-        transcript.hash_point(proof["c_1"])
+        transcript = PlonkTranscript(b'plonk')
+        transcript.append_point(b'a_1', proof["a_1"])
+        transcript.append_point(b'b_1', proof["b_1"])
+        transcript.append_point(b'c_1', proof["c_1"])
 
-        beta = transcript.squeeze()
-        gamma = transcript.squeeze()
+        beta = transcript.get_and_append_challenge(b'beta')
+        gamma = transcript.get_and_append_challenge(b'gamma')
 
-        transcript.hash_point(proof["z_1"])
-        alpha = transcript.squeeze()
+        transcript.append_point(b'z_1', proof["z_1"])
+        alpha = transcript.get_and_append_challenge(b'alpha')
 
-        fft_cofactor = transcript.squeeze()
+        fft_cofactor = transcript.get_and_append_challenge(b'fft_cofactor')
 
-        transcript.hash_point(proof["t_lo_1"])
-        transcript.hash_point(proof["t_mid_1"])
-        transcript.hash_point(proof["t_hi_1"])
+        transcript.append_point(b't_lo_1', proof["t_lo_1"])
+        transcript.append_point(b't_mid_1', proof["t_mid_1"])
+        transcript.append_point(b't_hi_1', proof["t_hi_1"])
 
-        zed = transcript.squeeze()
+        zed = transcript.get_and_append_challenge(b'zed')
 
-        transcript.hash_scalar(proof["a_eval"])
-        transcript.hash_scalar(proof["b_eval"])
-        transcript.hash_scalar(proof["c_eval"])
-        transcript.hash_scalar(proof["s1_eval"])
-        transcript.hash_scalar(proof["s2_eval"])
-        transcript.hash_scalar(proof["z_shifted_eval"])
+        transcript.append_scalar(b'a_eval', proof["a_eval"])
+        transcript.append_scalar(b'b_eval', proof["b_eval"])
+        transcript.append_scalar(b'c_eval', proof["c_eval"])
+        transcript.append_scalar(b's1_eval', proof["s1_eval"])
+        transcript.append_scalar(b's2_eval', proof["s2_eval"])
+        transcript.append_scalar(b'z_shifted_eval', proof["z_shifted_eval"])
 
-        v = transcript.squeeze()
+        v = transcript.get_and_append_challenge(b'v')
 
-        transcript.hash_point(proof["W_z_1"])
-        transcript.hash_point(proof["W_zw_1"])
+        transcript.append_point(b'W_z_1', proof["W_z_1"])
+        transcript.append_point(b'W_zw_1', proof["W_zw_1"])
 
         # Does not need to be standardized, only needs to be unpredictable
-        u = transcript.squeeze()
+        u = transcript.get_and_append_challenge(b'u')
 
         PI_ev = barycentric_eval_at_point(
             [f_inner(-x) for x in public]
