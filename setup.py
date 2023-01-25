@@ -1,28 +1,23 @@
 from utils import *
 import py_ecc.bn128 as b
-from typing import NewType
-from curve import ec_lincomb
-
-G1Point = NewType("G1Point", tuple[b.FQ, b.FQ])
-G2Point = NewType("G2Point", tuple[b.FQ2, b.FQ2])
+from curve import ec_lincomb, G1Point, G2Point
+from compiler.program import CommonPreprocessedInput
+from verifier import VerificationKey
+from dataclasses import dataclass
 
 # Recover the trusted setup from a file in the format used in
 # https://github.com/iden3/snarkjs#7-prepare-phase-2
 SETUP_FILE_G1_STARTPOS = 80
 SETUP_FILE_POWERS_POS = 60
-Commitment = NewType("Commitment", G1Point)
 
 
+@dataclass
 class Setup(object):
     #   ([1]₁, [x]₁, ..., [x^{d-1}]₁)
     # = ( G,    xG,  ...,  x^{d-1}G ), where G is a generator of G_2
-    G1: list[G1Point]
+    powers_of_x: list[G1Point]
     # [x]₂ = xH, where H is a generator of G_2
     X2: G2Point
-
-    def __init__(self, G1_side: list[G1Point], X2: G2Point):
-        self.G1_side = G1_side
-        self.X2 = X2
 
     @classmethod
     def from_file(cls, filename):
@@ -42,8 +37,8 @@ class Setup(object):
         # extract the factor because we know the first point is the generator.
         factor = b.FQ(values[0]) / b.G1[0]
         values = [b.FQ(x) / factor for x in values]
-        G1_side = [(values[i * 2], values[i * 2 + 1]) for i in range(powers)]
-        print("Extracted G1 side, X^1 point: {}".format(G1_side[1]))
+        powers_of_x = [(values[i * 2], values[i * 2 + 1]) for i in range(powers)]
+        print("Extracted G1 side, X^1 point: {}".format(powers_of_x[1]))
         # Search for start of G2 points. We again know that the first point is
         # the generator.
         pos = SETUP_FILE_G1_STARTPOS + 32 * powers * 2
@@ -62,14 +57,30 @@ class Setup(object):
         X2 = (b.FQ2(X2_values[:2]), b.FQ2(X2_values[2:]))
         assert b.is_on_curve(X2, b.b2)
         print("Extracted G2 side, X^1 point: {}".format(X2))
-        # assert b.pairing(b.G2, G1_side[1]) == b.pairing(X2, b.G1)
+        # assert b.pairing(b.G2, powers_of_x[1]) == b.pairing(X2, b.G1)
         # print("X^1 points checked consistent")
-        return cls(G1_side, X2)
+        return cls(powers_of_x, X2)
 
     # Encodes the KZG commitment that evaluates to the given values in the group
-    def commit(self, values) -> Commitment:
+    def commit(self, values) -> G1Point:
         # inverse FFT from Lagrange basis to monomial basis
         coeffs = fft(values, inv=True)
-        if len(coeffs) > len(self.G1_side):
+        if len(coeffs) > len(self.powers_of_x):
             raise Exception("Not enough powers in setup")
-        return ec_lincomb([(s, x) for s, x in zip(self.G1_side, coeffs)])
+        return ec_lincomb([(s, x) for s, x in zip(self.powers_of_x, coeffs)])
+
+    # Generate the verification key for this program with the given setup
+    def verification_key(self, pk: CommonPreprocessedInput) -> VerificationKey:
+        return VerificationKey(
+            pk.group_order,
+            self.commit(pk.QM),
+            self.commit(pk.QL),
+            self.commit(pk.QR),
+            self.commit(pk.QO),
+            self.commit(pk.QC),
+            self.commit(pk.S1),
+            self.commit(pk.S2),
+            self.commit(pk.S3),
+            self.X2,
+            get_root_of_unity(pk.group_order),
+        )

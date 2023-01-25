@@ -12,7 +12,7 @@ def basic_test():
     setup = Setup.from_file("test/powersOfTau28_hez_final_11.ptau")
     print("Extracted setup")
     program = Program(["c <== a * b"], 8)
-    vk = VerificationKey.make_verification_key(program, setup)
+    vk = setup.verification_key(program.common_preprocessed_input())
     print("Generated verification key")
     their_output = json.load(open("test/main.plonk.vkey.json"))
     for key in ("Qm", "Ql", "Qr", "Qo", "Qc", "S1", "S2", "S3", "X_2"):
@@ -37,7 +37,7 @@ def basic_test():
 # }
 def ab_plus_a_test(setup):
     program = Program(["ab === a - c", "-ab === a * b"], 8)
-    vk = VerificationKey.make_verification_key(program, setup)
+    vk = setup.verification_key(program.common_preprocessed_input())
     print("Generated verification key")
     their_output = json.load(open("test/main.plonk.vkey-58.json"))
     for key in ("Qm", "Ql", "Qr", "Qo", "Qc", "S1", "S2", "S3", "X_2"):
@@ -53,7 +53,7 @@ def ab_plus_a_test(setup):
 
 def one_public_input_test(setup):
     program = Program(["c public", "c === a * b"], 8)
-    vk = VerificationKey.make_verification_key(program, setup)
+    vk = setup.verification_key(program.common_preprocessed_input())
     print("Generated verification key")
     their_output = json.load(open("test/main.plonk.vkey-59.json"))
     for key in ("Qm", "Ql", "Qr", "Qo", "Qc", "S1", "S2", "S3", "X_2"):
@@ -71,15 +71,17 @@ def prover_test(setup):
     print("Beginning prover test")
     program = Program(["e public", "c <== a * b", "e <== c * d"], 8)
     assignments = {"a": 3, "b": 4, "c": 12, "d": 5, "e": 60}
-    return Prover().prove(setup, program, assignments)
+    prover = Prover(setup, program)
+    proof = prover.prove(assignments)
     print("Prover test success")
+    return proof
 
 
 def verifier_test(setup, proof):
     print("Beginning verifier test")
     program = Program(["e public", "c <== a * b", "e <== c * d"], 8)
     public = [60]
-    vk = VerificationKey.make_verification_key(program, setup)
+    vk = setup.verification_key(program.common_preprocessed_input())
     assert vk.verify_proof(8, proof, public)
     assert vk.verify_proof_unoptimized(8, proof, public)
     print("Verifier test success")
@@ -107,7 +109,7 @@ def factorization_test(setup):
         16,
     )
     public = [91]
-    vk = VerificationKey.make_verification_key(program, setup)
+    vk = setup.verification_key(program.common_preprocessed_input())
     print("Generated verification key")
     assignments = program.fill_variable_assignments(
         {
@@ -121,7 +123,8 @@ def factorization_test(setup):
             "qb0": 1,
         }
     )
-    proof = Prover().prove(setup, program, assignments)
+    prover = Prover(setup, program)
+    proof = prover.prove(assignments)
     print("Generated proof")
     assert vk.verify_proof(16, proof, public)
     print("Factorization test success!")
@@ -162,9 +165,10 @@ def poseidon_test(setup):
     program = Program.from_str(output_proof_lang(), 1024)
     print("Generated code for Poseidon test")
     assignments = program.fill_variable_assignments({"L0": 1, "M0": 2})
-    vk = VerificationKey.make_verification_key(program, setup)
+    vk = setup.verification_key(program.common_preprocessed_input())
     print("Generated verification key")
-    proof = Prover().prove(setup, program, assignments)
+    prover = Prover(setup, program)
+    proof = prover.prove(assignments)
     print("Generated proof")
     assert vk.verify_proof(1024, proof, [1, 2, expected_value])
     print("Verified proof!")

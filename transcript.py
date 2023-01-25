@@ -1,18 +1,46 @@
-from typing import Optional
 from utils import Scalar
-from setup import G1Point
+from curve import G1Point
 from merlin import MerlinTranscript
 from py_ecc.secp256k1.secp256k1 import bytes_to_int
+from dataclasses import dataclass
 
 
-class PlonkTranscript(MerlinTranscript):
-    beta: Optional[Scalar] = None
-    gamma: Optional[Scalar] = None
-    alpha: Optional[Scalar] = None
-    fft_cofactor: Optional[Scalar] = None
-    zed: Optional[Scalar] = None
-    v: Optional[Scalar] = None
+@dataclass
+class Message1:
+    a_1: G1Point
+    b_1: G1Point
+    c_1: G1Point
 
+
+@dataclass
+class Message2:
+    z_1: G1Point
+
+
+@dataclass
+class Message3:
+    t_lo_1: G1Point
+    t_mid_1: G1Point
+    t_hi_1: G1Point
+
+
+@dataclass
+class Message4:
+    a_eval: Scalar
+    b_eval: Scalar
+    c_eval: Scalar
+    s1_eval: Scalar
+    s2_eval: Scalar
+    z_shifted_eval: Scalar
+
+
+@dataclass
+class Message5:
+    W_z_1: G1Point
+    W_zw_1: G1Point
+
+
+class Transcript(MerlinTranscript):
     def append(self, label: bytes, item: bytes) -> None:
         self.append_message(label, item)
 
@@ -30,3 +58,51 @@ class PlonkTranscript(MerlinTranscript):
             if f != Scalar.zero():  # Enforce challenge != 0
                 self.append(label, challenge_bytes)
                 return f
+
+    def round_1(self, message: Message1) -> tuple[Scalar, Scalar]:
+        self.append_point(b"a_1", message.a_1)
+        self.append_point(b"b_1", message.b_1)
+        self.append_point(b"c_1", message.c_1)
+
+        # The first two Fiat-Shamir challenges
+        beta = self.get_and_append_challenge(b"beta")
+        gamma = self.get_and_append_challenge(b"gamma")
+
+        return beta, gamma
+
+    def round_2(self, message: Message2) -> tuple[Scalar, Scalar]:
+        self.append_point(b"z_1", message.z_1)
+
+        alpha = self.get_and_append_challenge(b"alpha")
+        # This value could be anything, it just needs to be unpredictable. Lets us
+        # have evaluation forms at cosets to avoid zero evaluations, so we can
+        # divide polys without the 0/0 issue
+        fft_cofactor = self.get_and_append_challenge(b"fft_cofactor")
+
+        return alpha, fft_cofactor
+
+    def round_3(self, message: Message3) -> Scalar:
+        self.append_point(b"t_lo_1", message.t_lo_1)
+        self.append_point(b"t_mid_1", message.t_mid_1)
+        self.append_point(b"t_hi_1", message.t_hi_1)
+
+        zeta = self.get_and_append_challenge(b"zeta")
+        return zeta
+
+    def round_4(self, message: Message4) -> Scalar:
+        self.append_scalar(b"a_eval", message.a_eval)
+        self.append_scalar(b"b_eval", message.b_eval)
+        self.append_scalar(b"c_eval", message.c_eval)
+        self.append_scalar(b"s1_eval", message.s1_eval)
+        self.append_scalar(b"s2_eval", message.s2_eval)
+        self.append_scalar(b"z_shifted_eval", message.z_shifted_eval)
+
+        v = self.get_and_append_challenge(b"v")
+        return v
+
+    def round_5(self, message: Message5) -> Scalar:
+        self.append_point(b"W_z_1", message.W_z_1)
+        self.append_point(b"W_zw_1", message.W_zw_1)
+
+        u = self.get_and_append_challenge(b"u")
+        return u

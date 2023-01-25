@@ -6,6 +6,29 @@ from .utils import *
 from typing import Optional, Set
 
 
+@dataclass
+class CommonPreprocessedInput:
+    """Common preprocessed input"""
+
+    group_order: int
+    # q_M(X) multiplication selector polynomial
+    QM: list[Scalar]
+    # q_L(X) left selector polynomial
+    QL: list[Scalar]
+    # q_R(X) right selector polynomial
+    QR: list[Scalar]
+    # q_O(X) output selector polynomial
+    QO: list[Scalar]
+    # q_C(X) constants selector polynomial
+    QC: list[Scalar]
+    # S_σ1(X) first permutation polynomial S_σ1(X)
+    S1: list[Scalar]
+    # S_σ2(X) second permutation polynomial S_σ2(X)
+    S2: list[Scalar]
+    # S_σ3(X) third permutation polynomial S_σ3(X)
+    S3: list[Scalar]
+
+
 class Program:
     constraints: list[AssemblyEqn]
     group_order: int
@@ -16,6 +39,21 @@ class Program:
         assembly = [eq_to_assembly(constraint) for constraint in constraints]
         self.constraints = assembly
         self.group_order = group_order
+
+    def common_preprocessed_input(self) -> CommonPreprocessedInput:
+        L, R, M, O, C = self.make_gate_polynomials()
+        S = self.make_s_polynomials()
+        return CommonPreprocessedInput(
+            self.group_order,
+            M,
+            L,
+            R,
+            O,
+            C,
+            S[Column.LEFT],
+            S[Column.RIGHT],
+            S[Column.OUTPUT],
+        )
 
     @classmethod
     def from_str(cls, constraints: str, group_order: int):
@@ -28,7 +66,7 @@ class Program:
     def wires(self) -> list[GateWires]:
         return [constraint.wires for constraint in self.constraints]
 
-    def make_s_polynomials(self) -> dict[Column, list[Optional[Scalar]]]:
+    def make_s_polynomials(self) -> dict[Column, list[Scalar]]:
         # For each variable, extract the list of (column, row) positions
         # where that variable is used
         variable_uses: dict[Optional[str], Set[Cell]] = {None: set()}
@@ -52,10 +90,10 @@ class Program:
         # at S[OUTPUT][2] the field element representing (LEFT, 7)
         # at S[LEFT][4] the field element representing (OUTPUT, 2)
 
-        S: dict[Column, list[Optional[Scalar]]] = {
-            Column.LEFT: [None] * self.group_order,
-            Column.RIGHT: [None] * self.group_order,
-            Column.OUTPUT: [None] * self.group_order,
+        S: dict[Column, list[Scalar]] = {
+            Column.LEFT: [Scalar(0)] * self.group_order,
+            Column.RIGHT: [Scalar(0)] * self.group_order,
+            Column.OUTPUT: [Scalar(0)] * self.group_order,
         }
 
         for _, uses in variable_uses.items():

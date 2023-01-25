@@ -6,6 +6,8 @@ from utils import lincomb
 from dataclasses import dataclass
 
 primitive_root = 5
+G1Point = NewType("G1Point", tuple[b.FQ, b.FQ])
+G2Point = NewType("G2Point", tuple[b.FQ2, b.FQ2])
 
 
 class Scalar(Field):

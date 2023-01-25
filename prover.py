@@ -1,48 +1,82 @@
-from compiler.program import Program
-from compiler.utils import Column
+from compiler.program import Program, CommonPreprocessedInput
 from utils import *
 from setup import *
-from typing import Optional, Union, Mapping
+from typing import Optional
 from dataclasses import dataclass
-from transcript import PlonkTranscript
+from transcript import Transcript, Message1, Message2, Message3, Message4, Message5
+
+
+@dataclass
+class Proof:
+    msg_1: Message1
+    msg_2: Message2
+    msg_3: Message3
+    msg_4: Message4
+    msg_5: Message5
+
+    def flatten(self):
+        proof = {}
+        proof["a_1"] = self.msg_1.a_1
+        proof["b_1"] = self.msg_1.b_1
+        proof["c_1"] = self.msg_1.c_1
+        proof["z_1"] = self.msg_2.z_1
+        proof["t_lo_1"] = self.msg_3.t_lo_1
+        proof["t_mid_1"] = self.msg_3.t_mid_1
+        proof["t_hi_1"] = self.msg_3.t_hi_1
+        proof["a_eval"] = self.msg_4.a_eval
+        proof["b_eval"] = self.msg_4.b_eval
+        proof["c_eval"] = self.msg_4.c_eval
+        proof["s1_eval"] = self.msg_4.s1_eval
+        proof["s2_eval"] = self.msg_4.s2_eval
+        proof["z_shifted_eval"] = self.msg_4.z_shifted_eval
+        proof["W_z_1"] = self.msg_5.W_z_1
+        proof["W_zw_1"] = self.msg_5.W_zw_1
+        return proof
 
 
 @dataclass
 class Prover:
-    def prove(
-        self, setup: Setup, program: Program, witness: dict[Optional[str], int]
-    ) -> Mapping[str, Union[G1Point, Scalar]]:
-        self.group_order = program.group_order
-        proof = {}
+    group_order: int
+    setup: Setup
+    program: Program
+    pk: CommonPreprocessedInput
 
+    def __init__(self, setup: Setup, program: Program):
+        self.group_order = program.group_order
+        self.setup = setup
+        self.program = program
+        self.pk = program.common_preprocessed_input()
+
+    def prove(self, witness: dict[Optional[str], int]) -> Proof:
         # Initialise Fiat-Shamir transcript
-        transcript = PlonkTranscript(b"plonk")
+        transcript = Transcript(b"plonk")
 
         # Collect fixed and public information
-        self.init(program, witness)
+        # FIXME: Hash pk and PI into transcript
+        public_vars = self.program.get_public_assignments()
+        PI = [Scalar(-witness[v]) for v in public_vars] + [
+            Scalar(0) for _ in range(self.group_order - len(public_vars))
+        ]
+        self.PI = PI
 
         # Round 1
         # - [a(x)]₁ (commitment to left wire polynomial)
         # - [b(x)]₁ (commitment to right wire polynomial)
         # - [c(x)]₁ (commitment to output wire polynomial)
-        a_1, b_1, c_1 = self.round_1(program, witness, transcript, setup)
-        proof["a_1"] = a_1
-        proof["b_1"] = b_1
-        proof["c_1"] = c_1
+        msg_1 = self.round_1(witness)
+        self.beta, self.gamma = transcript.round_1(msg_1)
 
         # Round 2
         # - [z(x)]₁ (commitment to permutation polynomial)
-        z_1 = self.round_2(transcript, setup)
-        proof["z_1"] = z_1
+        msg_2 = self.round_2()
+        self.alpha, self.fft_cofactor = transcript.round_2(msg_2)
 
         # Round 3
         # - [t_lo(x)]₁ (commitment to t_lo(X), the low chunk of the quotient polynomial t(X))
         # - [t_mid(x)]₁ (commitment to t_mid(X), the middle chunk of the quotient polynomial t(X))
         # - [t_hi(x)]₁ (commitment to t_hi(X), the high chunk of the quotient polynomial t(X))
-        t_lo_1, t_mid_1, t_hi_1 = self.round_3(transcript, setup)
-        proof["t_lo_1"] = t_lo_1
-        proof["t_mid_1"] = t_mid_1
-        proof["t_hi_1"] = t_hi_1
+        msg_3 = self.round_3()
+        self.zeta = transcript.round_3(msg_3)
 
         # Round 4
         # - Evaluation of a(X) at evaluation challenge ζ
@@ -51,57 +85,23 @@ class Prover:
         # - Evaluation of the first permutation polynomial S_σ1(X) at evaluation challenge ζ
         # - Evaluation of the second permutation polynomial S_σ2(X) at evaluation challenge ζ
         # - Evaluation of the shifted permutation polynomial z(X) at the shifted evaluation challenge ζω
-        a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval = self.round_4(
-            transcript
-        )
-        proof["a_eval"] = a_eval
-        proof["b_eval"] = b_eval
-        proof["c_eval"] = c_eval
-        proof["s1_eval"] = s1_eval
-        proof["s2_eval"] = s2_eval
-        proof["z_shifted_eval"] = z_shifted_eval
+        msg_4 = self.round_4()
+        self.v = transcript.round_4(msg_4)
 
         # Round 5
         # - [W_ζ(X)]₁ (commitment to the opening proof polynomial)
         # - [W_ζω(X)]₁ (commitment to the opening proof polynomial)
-        W_z_1, W_zw_1 = self.round_5(transcript, setup)
-        proof["W_z_1"] = W_z_1
-        proof["W_zw_1"] = W_zw_1
 
-        return proof
+        msg_5 = self.round_5()
 
-    def init(self, program: Program, witness: dict[Optional[str], int]):
-        group_order = self.group_order
-
-        QL, QR, QM, QO, QC = program.make_gate_polynomials()
-        # Compute the accumulator polynomial for the permutation arguments
-        S = program.make_s_polynomials()
-        S1 = S[Column.LEFT]
-        S2 = S[Column.RIGHT]
-        S3 = S[Column.OUTPUT]
-
-        public_vars = program.get_public_assignments()
-        PI = [Scalar(-witness[v]) for v in public_vars] + [
-            Scalar(0) for _ in range(group_order - len(public_vars))
-        ]
-
-        self.QL = QL
-        self.QR = QR
-        self.QM = QM
-        self.QO = QO
-        self.QC = QC
-        self.S1 = S1
-        self.S2 = S2
-        self.S3 = S3
-        self.PI = PI
+        return Proof(msg_1, msg_2, msg_3, msg_4, msg_5)
 
     def round_1(
         self,
-        program: Program,
         witness: dict[Optional[str], int],
-        transcript: PlonkTranscript,
-        setup: Setup,
-    ) -> tuple[G1Point, G1Point, G1Point]:
+    ) -> Message1:
+        program = self.program
+        setup = self.setup
         group_order = self.group_order
 
         if None not in witness:
@@ -118,13 +118,8 @@ class Prover:
             C[i] = Scalar(witness[gate_wires.O])
 
         a_1 = setup.commit(A)
-        transcript.append_point(b"a_1", a_1)
-
         b_1 = setup.commit(B)
-        transcript.append_point(b"b_1", b_1)
-
         c_1 = setup.commit(C)
-        transcript.append_point(b"c_1", c_1)
 
         self.A = A
         self.B = B
@@ -133,32 +128,25 @@ class Prover:
         # Sanity check that witness fulfils gate constraints
         for i in range(group_order):
             assert (
-                A[i] * self.QL[i]
-                + B[i] * self.QR[i]
-                + A[i] * B[i] * self.QM[i]
-                + C[i] * self.QO[i]
+                A[i] * self.pk.QL[i]
+                + B[i] * self.pk.QR[i]
+                + A[i] * B[i] * self.pk.QM[i]
+                + C[i] * self.pk.QO[i]
                 + self.PI[i]
-                + self.QC[i]
+                + self.pk.QC[i]
                 == 0
             )
 
-        return a_1, b_1, c_1
+        return Message1(a_1, b_1, c_1)
 
     def round_2(
         self,
-        transcript: PlonkTranscript,
-        setup: Setup,
-    ) -> G1Point:
+    ) -> Message2:
         group_order = self.group_order
+        setup = self.setup
 
-        # The first two Fiat-Shamir challenges
-        beta = transcript.get_and_append_challenge(b"beta")
-        transcript.beta = beta
-        self.beta = beta
-
-        gamma = transcript.get_and_append_challenge(b"gamma")
-        transcript.gamma = gamma
-        self.gamma = gamma
+        beta = self.beta
+        gamma = self.gamma
 
         Z = [Scalar(1)]
         roots_of_unity = get_roots_of_unity(group_order)
@@ -168,9 +156,9 @@ class Prover:
                 * (self.A[i] + beta * roots_of_unity[i] + gamma)
                 * (self.B[i] + beta * 2 * roots_of_unity[i] + gamma)
                 * (self.C[i] + beta * 3 * roots_of_unity[i] + gamma)
-                / (self.A[i] + beta * self.S1[i] + gamma)
-                / (self.B[i] + beta * self.S2[i] + gamma)
-                / (self.C[i] + beta * self.S3[i] + gamma)
+                / (self.A[i] + beta * self.pk.S1[i] + gamma)
+                / (self.B[i] + beta * self.pk.S2[i] + gamma)
+                / (self.C[i] + beta * self.pk.S3[i] + gamma)
             )
         assert Z.pop() == 1
 
@@ -181,58 +169,53 @@ class Prover:
                 * self.rlc(self.B[i], 2 * roots_of_unity[i])
                 * self.rlc(self.C[i], 3 * roots_of_unity[i])
             ) * Z[i] - (
-                self.rlc(self.A[i], self.S1[i])
-                * self.rlc(self.B[i], self.S2[i])
-                * self.rlc(self.C[i], self.S3[i])
+                self.rlc(self.A[i], self.pk.S1[i])
+                * self.rlc(self.B[i], self.pk.S2[i])
+                * self.rlc(self.C[i], self.pk.S3[i])
             ) * Z[
                 (i + 1) % group_order
             ] == 0
 
         z_1 = setup.commit(Z)
-        transcript.append_point(b"z_1", z_1)
         print("Permutation accumulator polynomial successfully generated")
 
         self.Z = Z
-        return z_1
+        return Message2(z_1)
 
-    def round_3(
-        self, transcript: PlonkTranscript, setup: Setup
-    ) -> tuple[G1Point, G1Point, G1Point]:
+    def round_3(self) -> Message3:
         group_order = self.group_order
+        setup = self.setup
 
         # Compute the quotient polynomial
 
         # List of roots of unity at 4x fineness
         quarter_roots = get_roots_of_unity(group_order * 4)
 
-        alpha = transcript.get_and_append_challenge(b"alpha")
-        transcript.alpha = alpha
-
-        # This value could be anything, it just needs to be unpredictable. Lets us
-        # have evaluation forms at cosets to avoid zero evaluations, so we can
-        # divide polys without the 0/0 issue
-        fft_cofactor = transcript.get_and_append_challenge(b"fft_cofactor")
-        transcript.fft_cofactor = fft_cofactor
-        self.fft_cofactor = fft_cofactor
-
         A_big = self.fft_expand(self.A)
         B_big = self.fft_expand(self.B)
         C_big = self.fft_expand(self.C)
         # Z_H = X^N - 1, also in evaluation form in the coset
         ZH_big = [
-            ((Scalar(r) * fft_cofactor) ** group_order - 1) for r in quarter_roots
+            ((Scalar(r) * self.fft_cofactor) ** group_order - 1) for r in quarter_roots
         ]
 
         QL_big, QR_big, QM_big, QO_big, QC_big, PI_big = (
             self.fft_expand(x)
-            for x in (self.QL, self.QR, self.QM, self.QO, self.QC, self.PI)
+            for x in (
+                self.pk.QL,
+                self.pk.QR,
+                self.pk.QM,
+                self.pk.QO,
+                self.pk.QC,
+                self.PI,
+            )
         )
 
         Z_big = self.fft_expand(self.Z)
         Z_shifted_big = Z_big[4:] + Z_big[:4]
-        S1_big = self.fft_expand(self.S1)
-        S2_big = self.fft_expand(self.S2)
-        S3_big = self.fft_expand(self.S3)
+        S1_big = self.fft_expand(self.pk.S1)
+        S2_big = self.fft_expand(self.pk.S2)
+        S3_big = self.fft_expand(self.pk.S3)
 
         # Equals 1 at x = 1 = ω^0 and 0 at other roots of unity
         L0_big = self.fft_expand([Scalar(1)] + [Scalar(0)] * (group_order - 1))
@@ -252,11 +235,11 @@ class Prover:
         #    (Z - 1) * L0 = 0
         #    L0 = Lagrange polynomial, equal at all roots of unity except 1
 
-        assert transcript.beta is not None
-        assert transcript.gamma is not None
+        beta = self.beta
+        gamma = self.gamma
+        alpha = self.alpha
+        fft_cofactor = self.fft_cofactor
 
-        beta = transcript.beta
-        gamma = transcript.gamma
         QUOT_big = [
             (
                 (
@@ -312,28 +295,18 @@ class Prover:
         print("Generated T1, T2, T3 polynomials")
 
         t_lo_1 = setup.commit(T1)
-        transcript.append_point(b"t_lo_1", t_lo_1)
-
         t_mid_1 = setup.commit(T2)
-        transcript.append_point(b"t_mid_1", t_mid_1)
-
         t_hi_1 = setup.commit(T3)
-        transcript.append_point(b"t_hi_1", t_hi_1)
 
         self.T1 = T1
         self.T2 = T2
         self.T3 = T3
 
-        return t_lo_1, t_mid_1, t_hi_1
+        return Message3(t_lo_1, t_mid_1, t_hi_1)
 
-    def round_4(
-        self, transcript: PlonkTranscript
-    ) -> tuple[Scalar, Scalar, Scalar, Scalar, Scalar, Scalar]:
+    def round_4(self) -> Message4:
         group_order = self.group_order
-
-        zed = transcript.get_and_append_challenge(b"zed")
-        transcript.zed = zed
-        self.zed = zed
+        zeta = self.zeta
 
         # Compute the "linearization polynomial" R. This is a clever way to avoid
         # needing to provide evaluations of _all_ the polynomials that we are
@@ -348,24 +321,13 @@ class Prover:
         # it has to be "linear" in the proof items, hence why we can only use each
         # proof item once; any further multiplicands in each term need to be
         # replaced with their evaluations at Z, which do still need to be provided
-        a_eval = barycentric_eval_at_point(self.A, zed)
-        transcript.append_scalar(b"a_eval", a_eval)
-
-        b_eval = barycentric_eval_at_point(self.B, zed)
-        transcript.append_scalar(b"b_eval", b_eval)
-
-        c_eval = barycentric_eval_at_point(self.C, zed)
-        transcript.append_scalar(b"c_eval", c_eval)
-
-        s1_eval = barycentric_eval_at_point(self.S1, zed)
-        transcript.append_scalar(b"s1_eval", s1_eval)
-
-        s2_eval = barycentric_eval_at_point(self.S2, zed)
-        transcript.append_scalar(b"s2_eval", s2_eval)
-
+        a_eval = barycentric_eval_at_point(self.A, zeta)
+        b_eval = barycentric_eval_at_point(self.B, zeta)
+        c_eval = barycentric_eval_at_point(self.C, zeta)
+        s1_eval = barycentric_eval_at_point(self.pk.S1, zeta)
+        s2_eval = barycentric_eval_at_point(self.pk.S2, zeta)
         root_of_unity = get_root_of_unity(group_order)
-        z_shifted_eval = barycentric_eval_at_point(self.Z, zed * root_of_unity)
-        transcript.append_scalar(b"z_shifted_eval", z_shifted_eval)
+        z_shifted_eval = barycentric_eval_at_point(self.Z, zeta * root_of_unity)
 
         self.a_eval = a_eval
         self.b_eval = b_eval
@@ -374,21 +336,16 @@ class Prover:
         self.s2_eval = s2_eval
         self.z_shifted_eval = z_shifted_eval
 
-        return a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval
+        return Message4(a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval)
 
-    def round_5(
-        self, transcript: PlonkTranscript, setup: Setup
-    ) -> tuple[G1Point, G1Point]:
+    def round_5(self) -> Message5:
         group_order = self.group_order
+        setup = self.setup
 
-        v = transcript.get_and_append_challenge(b"v")
-        transcript.v = v
-
-        assert transcript.zed is not None
-        zed = transcript.zed
-        L0_ev = barycentric_eval_at_point([1] + [0] * (group_order - 1), zed)
-        ZH_ev = zed**group_order - 1
-        PI_ev = barycentric_eval_at_point(self.PI, zed)
+        zeta = self.zeta
+        L0_ev = barycentric_eval_at_point([1] + [0] * (group_order - 1), zeta)
+        ZH_ev = zeta**group_order - 1
+        PI_ev = barycentric_eval_at_point(self.PI, zeta)
 
         T1_big = self.fft_expand(self.T1)
         T2_big = self.fft_expand(self.T2)
@@ -396,19 +353,23 @@ class Prover:
 
         QL_big, QR_big, QM_big, QO_big, QC_big, PI_big = (
             self.fft_expand(x)
-            for x in (self.QL, self.QR, self.QM, self.QO, self.QC, self.PI)
+            for x in (
+                self.pk.QL,
+                self.pk.QR,
+                self.pk.QM,
+                self.pk.QO,
+                self.pk.QC,
+                self.PI,
+            )
         )
         Z_big = self.fft_expand(self.Z)
-        S3_big = self.fft_expand(self.S3)
+        S3_big = self.fft_expand(self.pk.S3)
 
-        assert transcript.beta is not None
-        assert transcript.gamma is not None
-        assert transcript.alpha is not None
-        assert transcript.fft_cofactor is not None
+        beta = self.beta
+        gamma = self.gamma
+        alpha = self.alpha
+        v = self.v
 
-        beta = transcript.beta
-        gamma = transcript.gamma
-        alpha = transcript.alpha
         R_big = [
             (
                 self.a_eval * QL_big[i]
@@ -419,9 +380,9 @@ class Prover:
                 + QC_big[i]
             )
             + (
-                (self.a_eval + beta * zed + gamma)
-                * (self.b_eval + beta * 2 * zed + gamma)
-                * (self.c_eval + beta * 3 * zed + gamma)
+                (self.a_eval + beta * zeta + gamma)
+                * (self.b_eval + beta * 2 * zeta + gamma)
+                * (self.c_eval + beta * 3 * zeta + gamma)
             )
             * alpha
             * Z_big[i]
@@ -435,8 +396,8 @@ class Prover:
             + ((Z_big[i] - 1) * L0_ev) * alpha**2
             - (
                 T1_big[i]
-                + zed**group_order * T2_big[i]
-                + zed ** (group_order * 2) * T3_big[i]
+                + zeta**group_order * T2_big[i]
+                + zeta ** (group_order * 2) * T3_big[i]
             )
             * ZH_ev
             for i in range(4 * group_order)
@@ -448,7 +409,7 @@ class Prover:
 
         print("R_pt", setup.commit(R))
 
-        assert barycentric_eval_at_point(R, zed) == 0
+        assert barycentric_eval_at_point(R, zeta) == 0
 
         print("Generated linearization polynomial R")
 
@@ -460,11 +421,18 @@ class Prover:
 
         QL_big, QR_big, QM_big, QO_big, QC_big, PI_big = (
             self.fft_expand(x)
-            for x in (self.QL, self.QR, self.QM, self.QO, self.QC, self.PI)
+            for x in (
+                self.pk.QL,
+                self.pk.QR,
+                self.pk.QM,
+                self.pk.QO,
+                self.pk.QC,
+                self.PI,
+            )
         )
-        S1_big = self.fft_expand(self.S1)
-        S2_big = self.fft_expand(self.S2)
-        S3_big = self.fft_expand(self.S3)
+        S1_big = self.fft_expand(self.pk.S1)
+        S2_big = self.fft_expand(self.pk.S2)
+        S3_big = self.fft_expand(self.pk.S3)
 
         roots_of_unity = get_roots_of_unity(group_order)
         quarter_roots = get_roots_of_unity(group_order * 4)
@@ -478,7 +446,7 @@ class Prover:
                 + v**4 * (S1_big[i] - self.s1_eval)
                 + v**5 * (S2_big[i] - self.s2_eval)
             )
-            / (transcript.fft_cofactor * quarter_roots[i] - zed)
+            / (self.fft_cofactor * quarter_roots[i] - zeta)
             for i in range(group_order * 4)
         ]
 
@@ -494,7 +462,7 @@ class Prover:
 
         W_zw_big = [
             (Z_big[i] - self.z_shifted_eval)
-            / (transcript.fft_cofactor * quarter_roots[i] - zed * roots_of_unity[1])
+            / (self.fft_cofactor * quarter_roots[i] - zeta * roots_of_unity[1])
             for i in range(group_order * 4)
         ]
 
@@ -504,7 +472,7 @@ class Prover:
         W_zw_1 = setup.commit(W_zw)
 
         print("Generated final quotient witness polynomials")
-        return W_z_1, W_zw_1
+        return Message5(W_z_1, W_zw_1)
 
     def fft_expand(self, x):
         return coeffs_to_coset_extended_lagrange(x, self.fft_cofactor)

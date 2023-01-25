@@ -8,7 +8,7 @@ Prover.round_1(
     self,
     program: Program,
     witness: dict[Optional[str], int],
-    transcript: PlonkTranscript,
+    transcript: Transcript,
     setup: Setup,
 ) -> tuple[G1Point, G1Point, G1Point]
 ```
@@ -16,7 +16,7 @@ Prover.round_1(
 ```python
 Prover.round_2(
     self,
-    transcript: PlonkTranscript,
+    transcript: Transcript,
     setup: Setup,
 ) -> G1Point
 ```
@@ -24,7 +24,7 @@ Prover.round_2(
 ```python
 Prover.round_3(
     self,
-    transcript: PlonkTranscript,
+    transcript: Transcript,
     setup: Setup,
 ) -> tuple[G1Point, G1Point, G1Point]
 ```
@@ -32,14 +32,14 @@ Prover.round_3(
 ```python
 Prover.round_4(
     self,
-    transcript: PlonkTranscript,
+    transcript: Transcript,
 ) -> tuple[Scalar, Scalar, Scalar, Scalar, Scalar, Scalar]
 ```
 5. Implement Round 5 of the PlonK prover:
 ```python
 Prover.round_5(
     self,
-    transcript: PlonkTranscript,
+    transcript: Transcript,
     setup: Setup,
 ) -> tuple[G1Point, G1Point]
 ```
@@ -92,6 +92,32 @@ Examples of invalid program constraints:
 - `a <== b * * c` (two multiplications in a row)
 - `e <== a + b * c * d` (multiplicative degree > 2)
 
+Given a `Program`, we can derive the `CommonPreprocessedInput`, which are the polynomials representing the fixed constraints of the program. The prover later uses these polynomials to construct the quotient polynomial, and to compute their evaluations at a given challenge point.
+
+```python
+@dataclass
+class CommonPreprocessedInput:
+    """Common preprocessed input"""
+
+    group_order: int
+    # q_M(X) multiplication selector polynomial
+    QM: list[Scalar]
+    # q_L(X) left selector polynomial
+    QL: list[Scalar]
+    # q_R(X) right selector polynomial
+    QR: list[Scalar]
+    # q_O(X) output selector polynomial
+    QO: list[Scalar]
+    # q_C(X) constants selector polynomial
+    QC: list[Scalar]
+    # S_σ1(X) first permutation polynomial S_σ1(X)
+    S1: list[Scalar]
+    # S_σ2(X) second permutation polynomial S_σ2(X)
+    S2: list[Scalar]
+    # S_σ3(X) third permutation polynomial S_σ3(X)
+    S3: list[Scalar]
+```
+
 #### Assembly
 Our "assembly" language consists of `AssemblyEqn`s:
 
@@ -133,6 +159,16 @@ where:
 - $x \in \mathbb{F}$ is a randomly chosen, **secret** evaluation point; and
 - $d$ is the size of the trusted setup, corresponding to the maximum degree polynomial that it can support.
 
+```python
+@dataclass
+class Setup(object):
+    #   ([1]₁, [x]₁, ..., [x^{d-1}]₁)
+    # = ( G,    xG,  ...,  x^{d-1}G ), where G is a generator of G_2
+    powers_of_x: list[G1Point]
+    # [x]₂ = xH, where H is a generator of G_2
+    X2: G2Point
+```
+
 In this repository, we are using the pairing-friendly [BN254 curve](https://hackmd.io/@jpw/bn254), where:
 - `p = 21888242871839275222246405745257275088696311157297823662689037894645226208583`
 - $\mathbb{G}_1$ is the curve $y^2 = x^3 + 3$ over $\mathbb{F}_p$;
@@ -147,14 +183,13 @@ The prover creates a proof of knowledge of some satisfying witness to a program.
 ```python
 @dataclass
 class Prover:
-    @classmethod
-    def prove(
-        self,
-        setup: Setup,
-        program: Program,
-        witness: dict[Optional[str], int]
-    ) -> Mapping[str, Union[G1Point, Scalar]]:
+    group_order: int
+    setup: Setup
+    program: Program
+    pk: CommonPreprocessedInput
 ```
+
+The prover progresses in five rounds, and produces a message at the end of each:
 
 The proof consists of:
 
@@ -185,7 +220,7 @@ In the preprocessing stage, the verifier computes a `VerificationKey` correspond
 class VerificationKey:
     # Generate the verification key for this program with the given setup
     @classmethod
-    def make_verification_key(cls, program: Program, setup: Setup):
+    def verification_key(cls, program: Program, setup: Setup):
 ```
 
 The `VerificationKey` contains:
