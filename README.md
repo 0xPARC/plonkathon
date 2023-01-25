@@ -2,7 +2,47 @@
 **PlonKathon** is part of the program for [MIT IAP 2023] [Modern Zero Knowledge Cryptography](https://zkiap.com/). Over the course of this weekend, we will get into the weeds of the PlonK protocol through a series of exercises and extensions. This repository contains a simple python implementation of PlonK adapted from [py_plonk](https://github.com/ethereum/research/tree/master/py_plonk), and targeted to be close to compatible with the implementation at https://zkrepl.dev.
 
 ### Exercises
-TODO
+1. Implement Round 1 of the PlonK prover:
+```python
+Prover.round_1(
+    self,
+    program: Program,
+    witness: dict[Optional[str], int],
+    transcript: PlonkTranscript,
+    setup: Setup,
+) -> tuple[G1Point, G1Point, G1Point]
+```
+2. Implement Round 2 of the PlonK prover:
+```python
+Prover.round_2(
+    self,
+    transcript: PlonkTranscript,
+    setup: Setup,
+) -> G1Point
+```
+3. Implement Round 3 of the PlonK prover:
+```python
+Prover.round_3(
+    self,
+    transcript: PlonkTranscript,
+    setup: Setup,
+) -> tuple[G1Point, G1Point, G1Point]
+```
+4. Implement Round 4 of the PlonK prover:
+```python
+Prover.round_4(
+    self,
+    transcript: PlonkTranscript,
+) -> tuple[Scalar, Scalar, Scalar, Scalar, Scalar, Scalar]
+```
+5. Implement Round 5 of the PlonK prover:
+```python
+Prover.round_5(
+    self,
+    transcript: PlonkTranscript,
+    setup: Setup,
+) -> tuple[G1Point, G1Point]
+```
 
 ### Extensions
 1. Add support for custom gates.
@@ -106,14 +146,14 @@ The prover creates a proof of knowledge of some satisfying witness to a program.
 
 ```python
 @dataclass
-class Proof:
+class Prover:
     @classmethod
-    def prove_from_witness(
-        cls,
+    def prove(
+        self,
         setup: Setup,
         program: Program,
         witness: dict[Optional[str], int]
-    ):
+    ) -> Mapping[str, Union[G1Point, Scalar]]:
 ```
 
 The proof consists of:

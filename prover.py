@@ -2,14 +2,16 @@ from compiler.program import Program
 from compiler.utils import Column
 from utils import *
 from setup import *
-from typing import Optional
+from typing import Optional, Union, Mapping
 from dataclasses import dataclass
 from transcript import PlonkTranscript
 
 
 @dataclass
 class Prover:
-    def prove(self, setup: Setup, program: Program, witness: dict[Optional[str], int]):
+    def prove(
+        self, setup: Setup, program: Program, witness: dict[Optional[str], int]
+    ) -> Mapping[str, Union[G1Point, Scalar]]:
         self.group_order = program.group_order
         proof = {}
 
@@ -99,7 +101,7 @@ class Prover:
         witness: dict[Optional[str], int],
         transcript: PlonkTranscript,
         setup: Setup,
-    ):
+    ) -> tuple[G1Point, G1Point, G1Point]:
         group_order = self.group_order
 
         if None not in witness:
@@ -146,7 +148,7 @@ class Prover:
         self,
         transcript: PlonkTranscript,
         setup: Setup,
-    ):
+    ) -> G1Point:
         group_order = self.group_order
 
         # The first two Fiat-Shamir challenges
@@ -193,7 +195,9 @@ class Prover:
         self.Z = Z
         return z_1
 
-    def round_3(self, transcript: PlonkTranscript, setup: Setup):
+    def round_3(
+        self, transcript: PlonkTranscript, setup: Setup
+    ) -> tuple[G1Point, G1Point, G1Point]:
         group_order = self.group_order
 
         # Compute the quotient polynomial
@@ -322,7 +326,9 @@ class Prover:
 
         return t_lo_1, t_mid_1, t_hi_1
 
-    def round_4(self, transcript: PlonkTranscript):
+    def round_4(
+        self, transcript: PlonkTranscript
+    ) -> tuple[Scalar, Scalar, Scalar, Scalar, Scalar, Scalar]:
         group_order = self.group_order
 
         zed = transcript.get_and_append_challenge(b"zed")
@@ -370,7 +376,9 @@ class Prover:
 
         return a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval
 
-    def round_5(self, transcript: PlonkTranscript, setup: Setup):
+    def round_5(
+        self, transcript: PlonkTranscript, setup: Setup
+    ) -> tuple[G1Point, G1Point]:
         group_order = self.group_order
 
         v = transcript.get_and_append_challenge(b"v")

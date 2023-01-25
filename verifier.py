@@ -2,7 +2,6 @@ import py_ecc.bn128 as b
 from utils import *
 from dataclasses import dataclass
 from setup import G1Point, G2Point
-from prover import Prover
 from compiler.program import Program
 from compiler.utils import Column
 from setup import Setup
