@@ -234,8 +234,8 @@ class Prover:
         S2_big = self.fft_expand(self.S2)
         S3_big = self.fft_expand(self.S3)
 
-        # Equals 1 at x=1 and 0 at other roots of unity
-        L1_big = self.fft_expand([Scalar(1)] + [Scalar(0)] * (group_order - 1))
+        # Equals 1 at x = 1 = ω^0 and 0 at other roots of unity
+        L0_big = self.fft_expand([Scalar(1)] + [Scalar(0)] * (group_order - 1))
 
         # Compute the quotient polynomial (called T(x) in the paper)
         # It is only possible to construct this polynomial if the following
@@ -249,8 +249,8 @@ class Prover:
         #                   (rlc of B, S2, 1) / (rlc of C, S3, 1)
         #    rlc = random linear combination: term_1 + beta * term2 + gamma * term3
         # 3. The permutation accumulator equals 1 at the start point
-        #    (Z - 1) * L1 = 0
-        #    L1 = Lagrange polynomial, equal at all roots of unity except 1
+        #    (Z - 1) * L0 = 0
+        #    L0 = Lagrange polynomial, equal at all roots of unity except 1
 
         assert transcript.beta is not None
         assert transcript.gamma is not None
@@ -281,7 +281,7 @@ class Prover:
                 )
                 * alpha
                 * Z_shifted_big[i]
-                + ((Z_big[i] - 1) * L1_big[i] * alpha**2)
+                + ((Z_big[i] - 1) * L0_big[i] * alpha**2)
             )
             / ZH_big[i]
             for i in range(group_order * 4)
@@ -386,7 +386,7 @@ class Prover:
 
         assert transcript.zed is not None
         zed = transcript.zed
-        L1_ev = barycentric_eval_at_point([1] + [0] * (group_order - 1), zed)
+        L0_ev = barycentric_eval_at_point([1] + [0] * (group_order - 1), zed)
         ZH_ev = zed**group_order - 1
         PI_ev = barycentric_eval_at_point(self.PI, zed)
 
@@ -432,7 +432,7 @@ class Prover:
             )
             * alpha
             * self.z_shifted_eval
-            + ((Z_big[i] - 1) * L1_ev) * alpha**2
+            + ((Z_big[i] - 1) * L0_ev) * alpha**2
             - (
                 T1_big[i]
                 + zed**group_order * T2_big[i]

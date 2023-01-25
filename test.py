@@ -80,8 +80,8 @@ def verifier_test(setup, proof):
     program = Program(["e public", "c <== a * b", "e <== c * d"], 8)
     public = [60]
     vk = VerificationKey.make_verification_key(program, setup)
-    assert vk.verify_proof(8, proof, public, optimized=False)
-    assert vk.verify_proof(8, proof, public, optimized=True)
+    assert vk.verify_proof(8, proof, public)
+    assert vk.verify_proof_unoptimized(8, proof, public)
     print("Verifier test success")
 
 
@@ -123,7 +123,7 @@ def factorization_test(setup):
     )
     proof = Prover().prove(setup, program, assignments)
     print("Generated proof")
-    assert vk.verify_proof(16, proof, public, optimized=True)
+    assert vk.verify_proof(16, proof, public)
     print("Factorization test success!")
 
 

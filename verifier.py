@@ -51,129 +51,34 @@ class VerificationKey:
             get_root_of_unity(program.group_order),
         )
 
-    # Basic, easier-to-understand version of what's going on
-
-    # Recover the commitment to the linearization polynomial R,
-    # exactly the same as what was created by the prover
-    def _verify_inner(
-        self,
-        group_order: int,
-        proof,
-        PI_ev: Scalar,
-        v: Scalar,
-        zed: Scalar,
-        alpha: Scalar,
-        beta: Scalar,
-        gamma: Scalar,
-    ) -> bool:
-        root_of_unity = get_root_of_unity(group_order)
-        ZH_ev = zed**group_order - 1
-        L1_ev = ZH_ev / (group_order * (zed - 1))
-
-        R_pt = ec_lincomb(
-            [
-                (self.Qm, proof["a_eval"] * proof["b_eval"]),
-                (self.Ql, proof["a_eval"]),
-                (self.Qr, proof["b_eval"]),
-                (self.Qo, proof["c_eval"]),
-                (b.G1, PI_ev),
-                (self.Qc, 1),
-                (
-                    proof["z_1"],
-                    (
-                        (proof["a_eval"] + beta * zed + gamma)
-                        * (proof["b_eval"] + beta * 2 * zed + gamma)
-                        * (proof["c_eval"] + beta * 3 * zed + gamma)
-                        * alpha
-                    ),
-                ),
-                (
-                    self.S3,
-                    (
-                        -(proof["a_eval"] + beta * proof["s1_eval"] + gamma)
-                        * (proof["b_eval"] + beta * proof["s2_eval"] + gamma)
-                        * beta
-                        * alpha
-                        * proof["z_shifted_eval"]
-                    ),
-                ),
-                (
-                    b.G1,
-                    (
-                        -(proof["a_eval"] + beta * proof["s1_eval"] + gamma)
-                        * (proof["b_eval"] + beta * proof["s2_eval"] + gamma)
-                        * (proof["c_eval"] + gamma)
-                        * alpha
-                        * proof["z_shifted_eval"]
-                    ),
-                ),
-                (proof["z_1"], L1_ev * alpha**2),
-                (b.G1, -L1_ev * alpha**2),
-                (proof["t_lo_1"], -ZH_ev),
-                (proof["t_mid_1"], -ZH_ev * zed**group_order),
-                (proof["t_hi_1"], -ZH_ev * zed ** (group_order * 2)),
-            ]
-        )
-
-        print("verifier R_pt", R_pt)
-
-        # Verify that R(z) = 0 and the prover-provided evaluations
-        # A(z), B(z), C(z), S1(z), S2(z) are all correct
-        assert b.pairing(
-            b.G2,
-            ec_lincomb(
-                [
-                    (R_pt, 1),
-                    (proof["a_1"], v),
-                    (b.G1, -v * proof["a_eval"]),
-                    (proof["b_1"], v**2),
-                    (b.G1, -(v**2) * proof["b_eval"]),
-                    (proof["c_1"], v**3),
-                    (b.G1, -(v**3) * proof["c_eval"]),
-                    (self.S1, v**4),
-                    (b.G1, -(v**4) * proof["s1_eval"]),
-                    (self.S2, v**5),
-                    (b.G1, -(v**5) * proof["s2_eval"]),
-                ]
-            ),
-        ) == b.pairing(b.add(self.X_2, ec_mul(b.G2, -zed)), proof["W_z_1"])
-        print("done check 1")
-
-        # Verify that the provided value of Z(zed*w) is correct
-        assert b.pairing(
-            b.G2, ec_lincomb([(proof["z_1"], 1), (b.G1, -proof["z_shifted_eval"])])
-        ) == b.pairing(
-            b.add(self.X_2, ec_mul(b.G2, -zed * root_of_unity)), proof["W_zw_1"]
-        )
-        print("done check 2")
-        return True
-
     # More optimized version that tries hard to minimize pairings and
     # elliptic curve multiplications, but at the cost of being harder
     # to understand and mixing together a lot of the computations to
     # efficiently batch them
-    def _optimized_verify_inner(
-        self,
-        group_order: int,
-        proof,
-        PI_ev: Scalar,
-        v: Scalar,
-        u: Scalar,
-        zed: Scalar,
-        alpha: Scalar,
-        beta: Scalar,
-        gamma: Scalar,
-    ) -> bool:
+    def verify_proof(self, group_order: int, proof, public=[]) -> bool:
+        # 4. Compute challenges
+        beta, gamma, alpha, zed, v, u = self.compute_challenges(proof)
+
+        # 5. Compute zero polynomial evaluation Z_H(ζ) = ζ^n - 1
         root_of_unity = get_root_of_unity(group_order)
         ZH_ev = zed**group_order - 1
-        L1_ev = ZH_ev / (group_order * (zed - 1))
+
+        # 6. Compute Lagrange polynomial evaluation L_0(ζ)
+        L0_ev = ZH_ev / (group_order * (zed - 1))
+
+        # 7. Compute public input polynomial evaluation PI(ζ).
+        PI_ev = barycentric_eval_at_point(
+            [Scalar(-x) for x in public]
+            + [Scalar(0) for _ in range(group_order - len(public))],
+            zed,
+        )
 
         # Compute the constant term of R. This is not literally the degree-0
         # term of the R polynomial; rather, it's the portion of R that can
         # be computed directly, without resorting to elliptic cutve commitments
         r0 = (
             PI_ev
-            - L1_ev * alpha**2
+            - L0_ev * alpha**2
             - (
                 alpha
                 * (proof["a_eval"] + beta * proof["s1_eval"] + gamma)
@@ -198,7 +103,7 @@ class VerificationKey:
                         * (proof["b_eval"] + beta * 2 * zed + gamma)
                         * (proof["c_eval"] + beta * 3 * zed + gamma)
                         * alpha
-                        + L1_ev * alpha**2
+                        + L0_ev * alpha**2
                         + u
                     ),
                 ),
@@ -274,9 +179,109 @@ class VerificationKey:
         print("done combined check")
         return True
 
-    def verify_proof(self, group_order: int, proof, public=[], optimized=True) -> bool:
-        # Compute challenges (should be same as those computed by prover)
+    # Basic, easier-to-understand version of what's going on
+    def verify_proof_unoptimized(self, group_order: int, proof, public=[]) -> bool:
+        # 4. Compute challenges
+        beta, gamma, alpha, zed, v, _ = self.compute_challenges(proof)
 
+        # 5. Compute zero polynomial evaluation Z_H(ζ) = ζ^n - 1
+        root_of_unity = get_root_of_unity(group_order)
+        ZH_ev = zed**group_order - 1
+
+        # 6. Compute Lagrange polynomial evaluation L_0(ζ)
+        L0_ev = ZH_ev / (group_order * (zed - 1))
+
+        # 7. Compute public input polynomial evaluation PI(ζ).
+        PI_ev = barycentric_eval_at_point(
+            [Scalar(-x) for x in public]
+            + [Scalar(0) for _ in range(group_order - len(public))],
+            zed,
+        )
+
+        # Recover the commitment to the linearization polynomial R,
+        # exactly the same as what was created by the prover
+        R_pt = ec_lincomb(
+            [
+                (self.Qm, proof["a_eval"] * proof["b_eval"]),
+                (self.Ql, proof["a_eval"]),
+                (self.Qr, proof["b_eval"]),
+                (self.Qo, proof["c_eval"]),
+                (b.G1, PI_ev),
+                (self.Qc, 1),
+                (
+                    proof["z_1"],
+                    (
+                        (proof["a_eval"] + beta * zed + gamma)
+                        * (proof["b_eval"] + beta * 2 * zed + gamma)
+                        * (proof["c_eval"] + beta * 3 * zed + gamma)
+                        * alpha
+                    ),
+                ),
+                (
+                    self.S3,
+                    (
+                        -(proof["a_eval"] + beta * proof["s1_eval"] + gamma)
+                        * (proof["b_eval"] + beta * proof["s2_eval"] + gamma)
+                        * beta
+                        * alpha
+                        * proof["z_shifted_eval"]
+                    ),
+                ),
+                (
+                    b.G1,
+                    (
+                        -(proof["a_eval"] + beta * proof["s1_eval"] + gamma)
+                        * (proof["b_eval"] + beta * proof["s2_eval"] + gamma)
+                        * (proof["c_eval"] + gamma)
+                        * alpha
+                        * proof["z_shifted_eval"]
+                    ),
+                ),
+                (proof["z_1"], L0_ev * alpha**2),
+                (b.G1, -L0_ev * alpha**2),
+                (proof["t_lo_1"], -ZH_ev),
+                (proof["t_mid_1"], -ZH_ev * zed**group_order),
+                (proof["t_hi_1"], -ZH_ev * zed ** (group_order * 2)),
+            ]
+        )
+
+        print("verifier R_pt", R_pt)
+
+        # Verify that R(z) = 0 and the prover-provided evaluations
+        # A(z), B(z), C(z), S1(z), S2(z) are all correct
+        assert b.pairing(
+            b.G2,
+            ec_lincomb(
+                [
+                    (R_pt, 1),
+                    (proof["a_1"], v),
+                    (b.G1, -v * proof["a_eval"]),
+                    (proof["b_1"], v**2),
+                    (b.G1, -(v**2) * proof["b_eval"]),
+                    (proof["c_1"], v**3),
+                    (b.G1, -(v**3) * proof["c_eval"]),
+                    (self.S1, v**4),
+                    (b.G1, -(v**4) * proof["s1_eval"]),
+                    (self.S2, v**5),
+                    (b.G1, -(v**5) * proof["s2_eval"]),
+                ]
+            ),
+        ) == b.pairing(b.add(self.X_2, ec_mul(b.G2, -zed)), proof["W_z_1"])
+        print("done check 1")
+
+        # Verify that the provided value of Z(zed*w) is correct
+        assert b.pairing(
+            b.G2, ec_lincomb([(proof["z_1"], 1), (b.G1, -proof["z_shifted_eval"])])
+        ) == b.pairing(
+            b.add(self.X_2, ec_mul(b.G2, -zed * root_of_unity)), proof["W_zw_1"]
+        )
+        print("done check 2")
+        return True
+
+    # Compute challenges (should be same as those computed by prover)
+    def compute_challenges(
+        self, proof
+    ) -> tuple[Scalar, Scalar, Scalar, Scalar, Scalar, Scalar]:
         transcript = PlonkTranscript(b"plonk")
         transcript.append_point(b"a_1", proof["a_1"])
         transcript.append_point(b"b_1", proof["b_1"])
@@ -288,7 +293,7 @@ class VerificationKey:
         transcript.append_point(b"z_1", proof["z_1"])
         alpha = transcript.get_and_append_challenge(b"alpha")
 
-        fft_cofactor = transcript.get_and_append_challenge(b"fft_cofactor")
+        _fft_cofactor = transcript.get_and_append_challenge(b"fft_cofactor")
 
         transcript.append_point(b"t_lo_1", proof["t_lo_1"])
         transcript.append_point(b"t_mid_1", proof["t_mid_1"])
@@ -311,32 +316,4 @@ class VerificationKey:
         # Does not need to be standardized, only needs to be unpredictable
         u = transcript.get_and_append_challenge(b"u")
 
-        PI_ev = barycentric_eval_at_point(
-            [Scalar(-x) for x in public]
-            + [Scalar(0) for _ in range(group_order - len(public))],
-            zed,
-        )
-
-        if not optimized:
-            return self._verify_inner(
-                group_order,
-                proof,
-                PI_ev,
-                v,
-                zed,
-                alpha,
-                beta,
-                gamma,
-            )
-        else:
-            return self._optimized_verify_inner(
-                group_order,
-                proof,
-                PI_ev,
-                v,
-                u,
-                zed,
-                alpha,
-                beta,
-                gamma,
-            )
+        return beta, gamma, alpha, zed, v, u
