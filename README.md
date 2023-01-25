@@ -2,47 +2,12 @@
 **PlonKathon** is part of the program for [MIT IAP 2023] [Modern Zero Knowledge Cryptography](https://zkiap.com/). Over the course of this weekend, we will get into the weeds of the PlonK protocol through a series of exercises and extensions. This repository contains a simple python implementation of PlonK adapted from [py_plonk](https://github.com/ethereum/research/tree/master/py_plonk), and targeted to be close to compatible with the implementation at https://zkrepl.dev.
 
 ### Exercises
-1. Implement Round 1 of the PlonK prover:
-```python
-Prover.round_1(
-    self,
-    program: Program,
-    witness: dict[Optional[str], int],
-    transcript: Transcript,
-    setup: Setup,
-) -> tuple[G1Point, G1Point, G1Point]
-```
-2. Implement Round 2 of the PlonK prover:
-```python
-Prover.round_2(
-    self,
-    transcript: Transcript,
-    setup: Setup,
-) -> G1Point
-```
-3. Implement Round 3 of the PlonK prover:
-```python
-Prover.round_3(
-    self,
-    transcript: Transcript,
-    setup: Setup,
-) -> tuple[G1Point, G1Point, G1Point]
-```
-4. Implement Round 4 of the PlonK prover:
-```python
-Prover.round_4(
-    self,
-    transcript: Transcript,
-) -> tuple[Scalar, Scalar, Scalar, Scalar, Scalar, Scalar]
-```
-5. Implement Round 5 of the PlonK prover:
-```python
-Prover.round_5(
-    self,
-    transcript: Transcript,
-    setup: Setup,
-) -> tuple[G1Point, G1Point]
-```
+#### Prover
+1. Implement Round 1 of the PlonK prover
+2. Implement Round 2 of the PlonK prover
+3. Implement Round 3 of the PlonK prover
+4. Implement Round 4 of the PlonK prover
+5. Implement Round 5 of the PlonK prover
 
 ### Extensions
 1. Add support for custom gates.
@@ -189,38 +154,88 @@ class Prover:
     pk: CommonPreprocessedInput
 ```
 
-The prover progresses in five rounds, and produces a message at the end of each:
+The prover progresses in five rounds, and produces a message at the end of each. After each round, the message is hashed into the `Transcript`.
 
-The proof consists of:
+The `Proof` consists of all the round messages (`Message1`, `Message2`, `Message3`, `Message4`, `Message5`).
 
-| proof element                     | remark                                                                                        |
-| --------------------------------- | --------------------------------------------------------------------------------------------- |
-| $[a(x)]_1$                        | commitment to left wire polynomial                                                            |
-| $[b(x)]_1$                        | commitment to right wire polynomial                                                           |
-| $[c(x)]_1$                        | commitment to output wire polynomial                                                          |
-| $[z(x)]_1$                        | commitment to permutation polynomial                                                          |
-| $[t_{lo}(x)]_1$                   | commitment to $t_{lo}(X)$, the low chunk of the quotient polynomial $t(X)$                    |
-| $[t_{mid}(x)]_1$                  | commitment to $t_{mid}(X)$, the middle chunk of the quotient polynomial $t(X)$                |
-| $[t_{hi}(x)]_1$                   | commitment to $t_{hi}(X)$, the high chunk of the quotient polynomial $t(X)$                   |
-| $\overline{a}$                    | opening of $a(X)$ at evaluation challenge $\zeta$                                             |
-| $\overline{b}$                    | opening of $b(X)$ at evaluation challenge $\zeta$                                             |
-| $\overline{c}$                    | opening of $c(X)$ at evaluation challenge $\zeta$                                             |
-| $\overline{\mathsf{s}}_{\sigma1}$ | opening of the first permutation polynomial $S_{\sigma1}(X)$ at evaluation challenge $\zeta$  |
-| $\overline{\mathsf{s}}_{\sigma2}$ | opening of the second permutation polynomial $S_{\sigma2}(X)$ at evaluation challenge $\zeta$ |
-| $\overline{z}_\omega$             | opening of shifted permutation polynomial $z(X)$ at shifted challenge $\zeta\omega$           |
-| $[W_\zeta(X)]_1$                  | commitment to the opening proof polynomial                                                    |
-| $[W_{\zeta\omega}(X)]_1$          | commitment to the opening proof polynomial                                                    |
+#### Round 1
+```python
+def round_1(
+    self,
+    witness: dict[Optional[str], int],
+) -> Message1
 
+@dataclass
+class Message1:
+    # - [a(x)]₁ (commitment to left wire polynomial)
+    a_1: G1Point
+    # - [b(x)]₁ (commitment to right wire polynomial)
+    b_1: G1Point
+    # - [c(x)]₁ (commitment to output wire polynomial)
+    c_1: G1Point
+```
+
+#### Round 2
+```python
+def round_2(self) -> Message2
+
+@dataclass
+class Message2:
+    # [z(x)]₁ (commitment to permutation polynomial)
+    z_1: G1Point
+```
+
+#### Round 3
+```python
+def round_3(self) -> Message3
+
+@dataclass
+class Message3:
+    # [t_lo(x)]₁ (commitment to t_lo(X), the low chunk of the quotient polynomial t(X))
+    t_lo_1: G1Point
+    # [t_mid(x)]₁ (commitment to t_mid(X), the middle chunk of the quotient polynomial t(X))
+    t_mid_1: G1Point
+    # [t_hi(x)]₁ (commitment to t_hi(X), the high chunk of the quotient polynomial t(X))
+    t_hi_1: G1Point
+```
+
+#### Round 4
+```python
+def round_4(self) -> Message4
+
+@dataclass
+class Message4:
+    # Evaluation of a(X) at evaluation challenge ζ
+    a_eval: Scalar
+    # Evaluation of b(X) at evaluation challenge ζ
+    b_eval: Scalar
+    # Evaluation of c(X) at evaluation challenge ζ
+    c_eval: Scalar
+    # Evaluation of the first permutation polynomial S_σ1(X) at evaluation challenge ζ
+    s1_eval: Scalar
+    # Evaluation of the second permutation polynomial S_σ2(X) at evaluation challenge ζ
+    s2_eval: Scalar
+    # Evaluation of the shifted permutation polynomial z(X) at the shifted evaluation challenge ζω
+    z_shifted_eval: Scalar
+```
+
+#### Round 5
+```python
+def round_5(self) -> Message5
+
+@dataclass
+class Message5:
+    # [W_ζ(X)]₁ (commitment to the opening proof polynomial)
+    W_z_1: G1Point
+    # [W_ζω(X)]₁ (commitment to the opening proof polynomial)
+    W_zw_1: G1Point
+```
 
 ### Verifier
-In the preprocessing stage, the verifier computes a `VerificationKey` corresponding to a specific `Program`.
+Given a `Setup` and a `Program`, we can generate a verification key for the program:
 
 ```python
-@dataclass
-class VerificationKey:
-    # Generate the verification key for this program with the given setup
-    @classmethod
-    def verification_key(cls, program: Program, setup: Setup):
+def verification_key(self, pk: CommonPreprocessedInput) -> VerificationKey
 ```
 
 The `VerificationKey` contains:

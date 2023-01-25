@@ -60,38 +60,22 @@ class Prover:
         self.PI = PI
 
         # Round 1
-        # - [a(x)]₁ (commitment to left wire polynomial)
-        # - [b(x)]₁ (commitment to right wire polynomial)
-        # - [c(x)]₁ (commitment to output wire polynomial)
         msg_1 = self.round_1(witness)
         self.beta, self.gamma = transcript.round_1(msg_1)
 
         # Round 2
-        # - [z(x)]₁ (commitment to permutation polynomial)
         msg_2 = self.round_2()
         self.alpha, self.fft_cofactor = transcript.round_2(msg_2)
 
         # Round 3
-        # - [t_lo(x)]₁ (commitment to t_lo(X), the low chunk of the quotient polynomial t(X))
-        # - [t_mid(x)]₁ (commitment to t_mid(X), the middle chunk of the quotient polynomial t(X))
-        # - [t_hi(x)]₁ (commitment to t_hi(X), the high chunk of the quotient polynomial t(X))
         msg_3 = self.round_3()
         self.zeta = transcript.round_3(msg_3)
 
         # Round 4
-        # - Evaluation of a(X) at evaluation challenge ζ
-        # - Evaluation of b(X) at evaluation challenge ζ
-        # - Evaluation of c(X) at evaluation challenge ζ
-        # - Evaluation of the first permutation polynomial S_σ1(X) at evaluation challenge ζ
-        # - Evaluation of the second permutation polynomial S_σ2(X) at evaluation challenge ζ
-        # - Evaluation of the shifted permutation polynomial z(X) at the shifted evaluation challenge ζω
         msg_4 = self.round_4()
         self.v = transcript.round_4(msg_4)
 
         # Round 5
-        # - [W_ζ(X)]₁ (commitment to the opening proof polynomial)
-        # - [W_ζω(X)]₁ (commitment to the opening proof polynomial)
-
         msg_5 = self.round_5()
 
         return Proof(msg_1, msg_2, msg_3, msg_4, msg_5)
@@ -139,9 +123,7 @@ class Prover:
 
         return Message1(a_1, b_1, c_1)
 
-    def round_2(
-        self,
-    ) -> Message2:
+    def round_2(self) -> Message2:
         group_order = self.group_order
         setup = self.setup
 

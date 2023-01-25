@@ -7,7 +7,7 @@ from transcript import Transcript
 
 @dataclass
 class VerificationKey:
-    """Verifying key"""
+    """Verification key"""
 
     group_order: int
     # [q_M(x)]₁ (commitment to multiplication selector polynomial)

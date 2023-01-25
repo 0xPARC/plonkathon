@@ -7,36 +7,51 @@ from dataclasses import dataclass
 
 @dataclass
 class Message1:
+    # [a(x)]₁ (commitment to left wire polynomial)
     a_1: G1Point
+    # [b(x)]₁ (commitment to right wire polynomial)
     b_1: G1Point
+    # [c(x)]₁ (commitment to output wire polynomial)
     c_1: G1Point
 
 
 @dataclass
 class Message2:
+    # [z(x)]₁ (commitment to permutation polynomial)
     z_1: G1Point
 
 
 @dataclass
 class Message3:
+    # [t_lo(x)]₁ (commitment to t_lo(X), the low chunk of the quotient polynomial t(X))
     t_lo_1: G1Point
+    # [t_mid(x)]₁ (commitment to t_mid(X), the middle chunk of the quotient polynomial t(X))
     t_mid_1: G1Point
+    # [t_hi(x)]₁ (commitment to t_hi(X), the high chunk of the quotient polynomial t(X))
     t_hi_1: G1Point
 
 
 @dataclass
 class Message4:
+    # Evaluation of a(X) at evaluation challenge ζ
     a_eval: Scalar
+    # Evaluation of b(X) at evaluation challenge ζ
     b_eval: Scalar
+    # Evaluation of c(X) at evaluation challenge ζ
     c_eval: Scalar
+    # Evaluation of the first permutation polynomial S_σ1(X) at evaluation challenge ζ
     s1_eval: Scalar
+    # Evaluation of the second permutation polynomial S_σ2(X) at evaluation challenge ζ
     s2_eval: Scalar
+    # Evaluation of the shifted permutation polynomial z(X) at the shifted evaluation challenge ζω
     z_shifted_eval: Scalar
 
 
 @dataclass
 class Message5:
+    # [W_ζ(X)]₁ (commitment to the opening proof polynomial)
     W_z_1: G1Point
+    # [W_ζω(X)]₁ (commitment to the opening proof polynomial)
     W_zw_1: G1Point
 
 
