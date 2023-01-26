@@ -131,7 +131,7 @@ class Prover:
         gamma = self.gamma
 
         Z = [Scalar(1)]
-        roots_of_unity = get_roots_of_unity(group_order)
+        roots_of_unity = Scalar.roots_of_unity(group_order)
         for i in range(group_order):
             Z.append(
                 Z[-1]
@@ -171,7 +171,7 @@ class Prover:
         # Compute the quotient polynomial
 
         # List of roots of unity at 4x fineness
-        quarter_roots = get_roots_of_unity(group_order * 4)
+        quarter_roots = Scalar.roots_of_unity(group_order * 4)
 
         A_big = self.fft_expand(self.A)
         B_big = self.fft_expand(self.B)
@@ -308,7 +308,7 @@ class Prover:
         c_eval = barycentric_eval_at_point(self.C, zeta)
         s1_eval = barycentric_eval_at_point(self.pk.S1, zeta)
         s2_eval = barycentric_eval_at_point(self.pk.S2, zeta)
-        root_of_unity = get_root_of_unity(group_order)
+        root_of_unity = Scalar.root_of_unity(group_order)
         z_shifted_eval = barycentric_eval_at_point(self.Z, zeta * root_of_unity)
 
         self.a_eval = a_eval
@@ -416,8 +416,8 @@ class Prover:
         S2_big = self.fft_expand(self.pk.S2)
         S3_big = self.fft_expand(self.pk.S3)
 
-        roots_of_unity = get_roots_of_unity(group_order)
-        quarter_roots = get_roots_of_unity(group_order * 4)
+        roots_of_unity = Scalar.roots_of_unity(group_order)
+        quarter_roots = Scalar.roots_of_unity(group_order * 4)
 
         W_z_big = [
             (

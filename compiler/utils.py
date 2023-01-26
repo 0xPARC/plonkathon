@@ -44,7 +44,7 @@ class Cell:
     # (column, row) pair. Expects section = 1 for left, 2 right, 3 output
     def label(self, group_order: int) -> Scalar:
         assert self.row < group_order
-        return get_roots_of_unity(group_order)[self.row] * self.column.value
+        return Scalar.roots_of_unity(group_order)[self.row] * self.column.value
 
 
 # Gets the key to use in the coeffs dictionary for the term for key1*key2,

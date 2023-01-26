@@ -82,5 +82,5 @@ class Setup(object):
             self.commit(pk.S2),
             self.commit(pk.S3),
             self.X2,
-            get_root_of_unity(pk.group_order),
+            Scalar.root_of_unity(pk.group_order),
         )

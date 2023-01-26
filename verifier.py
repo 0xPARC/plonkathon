@@ -1,7 +1,7 @@
 import py_ecc.bn128 as b
 from utils import *
 from dataclasses import dataclass
-from curve import G1Point, G2Point
+from curve import *
 from transcript import Transcript
 
 
@@ -41,7 +41,7 @@ class VerificationKey:
         proof = pf.flatten()
 
         # 5. Compute zero polynomial evaluation Z_H(ζ) = ζ^n - 1
-        root_of_unity = get_root_of_unity(group_order)
+        root_of_unity = Scalar.root_of_unity(group_order)
         ZH_ev = zeta**group_order - 1
 
         # 6. Compute Lagrange polynomial evaluation L_0(ζ)
@@ -167,7 +167,7 @@ class VerificationKey:
         proof = pf.flatten()
 
         # 5. Compute zero polynomial evaluation Z_H(ζ) = ζ^n - 1
-        root_of_unity = get_root_of_unity(group_order)
+        root_of_unity = Scalar.root_of_unity(group_order)
         ZH_ev = zeta**group_order - 1
 
         # 6. Compute Lagrange polynomial evaluation L_0(ζ)
