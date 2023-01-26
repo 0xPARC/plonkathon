@@ -4,6 +4,7 @@ from utils import *
 from .assembly import *
 from .utils import *
 from typing import Optional, Set
+from poly import Polynomial, Basis
 
 
 @dataclass
@@ -12,21 +13,21 @@ class CommonPreprocessedInput:
 
     group_order: int
     # q_M(X) multiplication selector polynomial
-    QM: list[Scalar]
+    QM: Polynomial
     # q_L(X) left selector polynomial
-    QL: list[Scalar]
+    QL: Polynomial
     # q_R(X) right selector polynomial
-    QR: list[Scalar]
+    QR: Polynomial
     # q_O(X) output selector polynomial
-    QO: list[Scalar]
+    QO: Polynomial
     # q_C(X) constants selector polynomial
-    QC: list[Scalar]
+    QC: Polynomial
     # S_σ1(X) first permutation polynomial S_σ1(X)
-    S1: list[Scalar]
+    S1: Polynomial
     # S_σ2(X) second permutation polynomial S_σ2(X)
-    S2: list[Scalar]
+    S2: Polynomial
     # S_σ3(X) third permutation polynomial S_σ3(X)
-    S3: list[Scalar]
+    S3: Polynomial
 
 
 class Program:
@@ -66,7 +67,7 @@ class Program:
     def wires(self) -> list[GateWires]:
         return [constraint.wires for constraint in self.constraints]
 
-    def make_s_polynomials(self) -> dict[Column, list[Scalar]]:
+    def make_s_polynomials(self) -> dict[Column, Polynomial]:
         # For each variable, extract the list of (column, row) positions
         # where that variable is used
         variable_uses: dict[Optional[str], Set[Cell]] = {None: set()}
@@ -90,7 +91,7 @@ class Program:
         # at S[OUTPUT][2] the field element representing (LEFT, 7)
         # at S[LEFT][4] the field element representing (OUTPUT, 2)
 
-        S: dict[Column, list[Scalar]] = {
+        S_values = {
             Column.LEFT: [Scalar(0)] * self.group_order,
             Column.RIGHT: [Scalar(0)] * self.group_order,
             Column.OUTPUT: [Scalar(0)] * self.group_order,
@@ -102,7 +103,12 @@ class Program:
                 next_i = (i + 1) % len(sorted_uses)
                 next_column = sorted_uses[next_i].column
                 next_row = sorted_uses[next_i].row
-                S[next_column][next_row] = cell.label(self.group_order)
+                S_values[next_column][next_row] = cell.label(self.group_order)
+
+        S = {}
+        S[Column.LEFT] = Polynomial(S_values[Column.LEFT], Basis.LAGRANGE)
+        S[Column.RIGHT] = Polynomial(S_values[Column.RIGHT], Basis.LAGRANGE)
+        S[Column.OUTPUT] = Polynomial(S_values[Column.OUTPUT], Basis.LAGRANGE)
 
         return S
 
@@ -127,7 +133,7 @@ class Program:
     # each a list of length `group_order`
     def make_gate_polynomials(
         self,
-    ) -> tuple[list[Scalar], list[Scalar], list[Scalar], list[Scalar], list[Scalar]]:
+    ) -> tuple[Polynomial, Polynomial, Polynomial, Polynomial, Polynomial]:
         L = [Scalar(0) for _ in range(self.group_order)]
         R = [Scalar(0) for _ in range(self.group_order)]
         M = [Scalar(0) for _ in range(self.group_order)]
@@ -140,7 +146,13 @@ class Program:
             M[i] = gate.M
             O[i] = gate.O
             C[i] = gate.C
-        return L, R, M, O, C
+        return (
+            Polynomial(L, Basis.LAGRANGE),
+            Polynomial(R, Basis.LAGRANGE),
+            Polynomial(M, Basis.LAGRANGE),
+            Polynomial(O, Basis.LAGRANGE),
+            Polynomial(C, Basis.LAGRANGE),
+        )
 
     # Attempts to "run" the program to fill in any intermediate variable
     # assignments, starting from the given assignments. Eg. if

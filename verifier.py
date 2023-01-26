@@ -3,6 +3,7 @@ from utils import *
 from dataclasses import dataclass
 from curve import *
 from transcript import Transcript
+from poly import Polynomial, Basis
 
 
 @dataclass
@@ -48,11 +49,12 @@ class VerificationKey:
         L0_ev = ZH_ev / (group_order * (zeta - 1))
 
         # 7. Compute public input polynomial evaluation PI(ζ).
-        PI_ev = barycentric_eval_at_point(
+        PI = Polynomial(
             [Scalar(-x) for x in public]
             + [Scalar(0) for _ in range(group_order - len(public))],
-            zeta,
+            Basis.LAGRANGE,
         )
+        PI_ev = PI.barycentric_eval(zeta)
 
         # Compute the constant term of R. This is not literally the degree-0
         # term of the R polynomial; rather, it's the portion of R that can
@@ -174,11 +176,12 @@ class VerificationKey:
         L0_ev = ZH_ev / (group_order * (zeta - 1))
 
         # 7. Compute public input polynomial evaluation PI(ζ).
-        PI_ev = barycentric_eval_at_point(
+        PI = Polynomial(
             [Scalar(-x) for x in public]
             + [Scalar(0) for _ in range(group_order - len(public))],
-            zeta,
+            Basis.LAGRANGE,
         )
+        PI_ev = PI.barycentric_eval(zeta)
 
         # Recover the commitment to the linearization polynomial R,
         # exactly the same as what was created by the prover

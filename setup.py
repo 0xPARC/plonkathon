@@ -4,6 +4,7 @@ from curve import ec_lincomb, G1Point, G2Point
 from compiler.program import CommonPreprocessedInput
 from verifier import VerificationKey
 from dataclasses import dataclass
+from poly import Polynomial, Basis
 
 # Recover the trusted setup from a file in the format used in
 # https://github.com/iden3/snarkjs#7-prepare-phase-2
@@ -62,9 +63,11 @@ class Setup(object):
         return cls(powers_of_x, X2)
 
     # Encodes the KZG commitment that evaluates to the given values in the group
-    def commit(self, values) -> G1Point:
+    def commit(self, values: Polynomial) -> G1Point:
+        assert values.basis == Basis.LAGRANGE
+
         # inverse FFT from Lagrange basis to monomial basis
-        coeffs = fft(values, inv=True)
+        coeffs = values.ifft().values
         if len(coeffs) > len(self.powers_of_x):
             raise Exception("Not enough powers in setup")
         return ec_lincomb([(s, x) for s, x in zip(self.powers_of_x, coeffs)])
