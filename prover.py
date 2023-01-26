@@ -208,53 +208,55 @@ class Prover:
             Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE)
         )
 
-        # Compute the quotient polynomial (called T(x) in the paper)
-        # It is only possible to construct this polynomial if the following
-        # equations are true at all roots of unity {1, w ... w^(n-1)}:
-        #
-        # 1. All gates are correct:
-        #    A * QL + B * QR + A * B * QM + C * QO + PI + QC = 0
-        # 2. The permutation accumulator is valid:
-        #    Z(wx) = Z(x) * (rlc of A, X, 1) * (rlc of B, 2X, 1) *
-        #                   (rlc of C, 3X, 1) / (rlc of A, S1, 1) /
-        #                   (rlc of B, S2, 1) / (rlc of C, S3, 1)
-        #    rlc = random linear combination: term_1 + beta * term2 + gamma * term3
-        # 3. The permutation accumulator equals 1 at the start point
-        #    (Z - 1) * L0 = 0
-        #    L0 = Lagrange polynomial, equal at all roots of unity except 1
-
-        beta = self.beta
-        gamma = self.gamma
         alpha = self.alpha
         fft_cofactor = self.fft_cofactor
         quarter_roots = Polynomial(
             Scalar.roots_of_unity(group_order * 4), Basis.LAGRANGE
         )
 
-        QUOT_big = (
+        # Compute the quotient polynomial (called T(x) in the paper)
+        # It is only possible to construct this polynomial if the following
+        # equations are true at all roots of unity {1, w ... w^(n-1)}:
+        # 1. All gates are correct:
+        #    A * QL + B * QR + A * B * QM + C * QO + PI + QC = 0
+        gate_constraints = lambda: (
+            A_big * QL_big
+            + B_big * QR_big
+            + A_big * B_big * QM_big
+            + C_big * QO_big
+            + PI_big
+            + QC_big
+        )
+
+        # 2. The permutation accumulator is valid:
+        #    Z(wx) = Z(x) * (rlc of A, X, 1) * (rlc of B, 2X, 1) *
+        #                   (rlc of C, 3X, 1) / (rlc of A, S1, 1) /
+        #                   (rlc of B, S2, 1) / (rlc of C, S3, 1)
+        #    rlc = random linear combination: term_1 + beta * term2 + gamma * term3
+        permutation_grand_product = lambda: (
             (
-                A_big * QL_big
-                + B_big * QR_big
-                + A_big * B_big * QM_big
-                + C_big * QO_big
-                + PI_big
-                + QC_big
-            )
-            + (
                 self.rlc(A_big, quarter_roots * fft_cofactor)
                 * self.rlc(B_big, quarter_roots * (fft_cofactor * 2))
                 * self.rlc(C_big, quarter_roots * (fft_cofactor * 3))
             )
-            * alpha
             * Z_big
             - (
                 self.rlc(A_big, S1_big)
                 * self.rlc(B_big, S2_big)
                 * self.rlc(C_big, S3_big)
             )
-            * alpha
             * Z_shifted_big
-            + ((Z_big - Scalar(1)) * L0_big * alpha**2)
+        )
+
+        # 3. The permutation accumulator equals 1 at the start point
+        #    (Z - 1) * L0 = 0
+        #    L0 = Lagrange polynomial, equal at all roots of unity except 1
+        permutation_first_row = lambda: (Z_big - Scalar(1)) * L0_big
+
+        QUOT_big = (
+            gate_constraints()
+            + permutation_grand_product() * alpha
+            + permutation_first_row() * alpha**2
         ) / ZH_big
 
         all_coeffs = self.expanded_evals_to_coeffs(QUOT_big).values
@@ -355,35 +357,40 @@ class Prover:
         Z_big = self.fft_expand(self.Z)
         S3_big = self.fft_expand(self.pk.S3)
 
-        beta = self.beta
-        gamma = self.gamma
         alpha = self.alpha
         v = self.v
+        c_eval = Polynomial([self.c_eval] * group_order * 4, Basis.LAGRANGE)
+
+        gate_constraints = lambda: (
+            QL_big * self.a_eval
+            + QR_big * self.b_eval
+            + QM_big * self.a_eval * self.b_eval
+            + QO_big * self.c_eval
+            + PI_ev
+            + QC_big
+        )
+
+        permutation_grand_product = lambda: (
+            Z_big
+            * (
+                self.rlc(self.a_eval, zeta)
+                * self.rlc(self.b_eval, 2 * zeta)
+                * self.rlc(self.c_eval, 3 * zeta)
+            )
+            - (
+                self.rlc(c_eval, S3_big)
+                * self.rlc(self.a_eval, self.s1_eval)
+                * self.rlc(self.b_eval, self.s2_eval)
+            )
+            * self.z_shifted_eval
+        )
+
+        permutation_first_row = lambda: (Z_big - Scalar(1)) * L0_ev
 
         R_big = (
-            (
-                QL_big * self.a_eval
-                + QR_big * self.b_eval
-                + QM_big * self.a_eval * self.b_eval
-                + QO_big * self.c_eval
-                + PI_ev
-                + QC_big
-            )
-            + Z_big
-            * (
-                (self.a_eval + beta * zeta + gamma)
-                * (self.b_eval + beta * 2 * zeta + gamma)
-                * (self.c_eval + beta * 3 * zeta + gamma)
-            )
-            * alpha
-            - (
-                (S3_big * beta + self.c_eval + gamma)
-                * (self.a_eval + beta * self.s1_eval + gamma)
-                * (self.b_eval + beta * self.s2_eval + gamma)
-            )
-            * alpha
-            * self.z_shifted_eval
-            + ((Z_big - Scalar(1)) * L0_ev) * alpha**2
+            gate_constraints()
+            + permutation_grand_product() * alpha
+            + permutation_first_row() * (alpha**2)
             - (
                 T1_big
                 + T2_big * zeta**group_order
