@@ -59,7 +59,7 @@ def fft(vals: list[Scalar], inv=False):
 # This lets us work with higher-degree polynomials, and the offset lets us
 # avoid the 0/0 problem when computing a division (as long as the offset is
 # chosen randomly)
-def coeffs_to_coset_extended_lagrange(vals, offset):
+def to_coset_extended_lagrange(vals, offset):
     group_order = len(vals)
     x_powers = fft(vals, inv=True)
     x_powers = [(offset**i * x) for i, x in enumerate(x_powers)] + [Scalar(0)] * (
@@ -69,7 +69,7 @@ def coeffs_to_coset_extended_lagrange(vals, offset):
 
 
 # Convert from offset form into coefficients
-# Note that we can't make a full inverse function of coeffs_to_coset_extended_lagrange
+# Note that we can't make a full inverse function of to_coset_extended_lagrange
 # because the output of this might be a deg >= n polynomial, which cannot
 # be expressed via evaluations at n roots of unity
 def coset_extended_lagrange_to_coeffs(evals, offset):

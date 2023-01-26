@@ -457,7 +457,7 @@ class Prover:
         return Message5(W_z_1, W_zw_1)
 
     def fft_expand(self, x):
-        return coeffs_to_coset_extended_lagrange(x, self.fft_cofactor)
+        return to_coset_extended_lagrange(x, self.fft_cofactor)
 
     def expanded_evals_to_coeffs(self, x):
         return coset_extended_lagrange_to_coeffs(x, self.fft_cofactor)
