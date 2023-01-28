@@ -18,7 +18,7 @@ def setup_test():
     dummy_values = Polynomial(
         list(map(Scalar, [1, 2, 3, 4, 5, 6, 7, 8])), Basis.LAGRANGE
     )
-    program = Program(["c <== a * b"], 8)
+    program = Program(["c <== a * b", "c <== 3"], 8)
     commitment = setup.commit(dummy_values)
     assert commitment == G1Point(
         (
@@ -27,6 +27,16 @@ def setup_test():
         )
     )
     vk = setup.verification_key(program.common_preprocessed_input())
+
+    print('==')
+    inp = program.common_preprocessed_input()
+    print("QM:", inp.QM.values)
+    print("QL:", inp.QL.values)
+    print("QR:", inp.QR.values)
+    print("QO:", inp.QO.values)
+    print("QC:", inp.QC.values)
+    print('==')
+
     assert (
         vk.w
         == 19540430494807482326159819597004422086093766032135589407132600596362845576832

@@ -57,11 +57,20 @@ class Prover:
         ## Checking step 1 - that inputs were encoded correctly
         # polynomial of public inputes
         public_vars = self.program.get_public_assignments()
+        print("=== public vars")
+        print(public_vars)
+        print("=== public vars")
         PI = Polynomial(
             [Scalar(-witness[v]) for v in public_vars]
             + [Scalar(0) for _ in range(self.group_order - len(public_vars))],
             Basis.LAGRANGE,
         )
+        print("=== WITNESS")
+        print(witness)
+        print("=== WITNESS")
+        print("=== PI")
+        print(PI.values)
+        print("=== PI")
         self.PI = PI
 
         # Round 1
@@ -106,6 +115,29 @@ class Prover:
 
         # Compute a_1, b_1, c_1 commitments to A, B, C polynomials
 
+        n_wires = len(program.wires())
+        self.A = Polynomial(
+            list(map(Scalar, [witness[program.wires()[i].L]
+                 for i in range(n_wires)])) + [Scalar(0)] * (group_order - n_wires),
+            Basis.LAGRANGE
+        )
+        self.B = Polynomial(
+            list(map(Scalar, [witness[program.wires()[i].R]
+                 for i in range(n_wires)])) + [Scalar(0)] * (group_order - n_wires),
+            Basis.LAGRANGE
+        )
+        self.C = Polynomial(
+            list(map(Scalar, [witness[program.wires()[i].O]
+                 for i in range(n_wires)])) + [Scalar(0)] * (group_order - n_wires),
+            Basis.LAGRANGE
+        )
+
+        a_1 = setup.commit(self.A)
+        b_1 = setup.commit(self.B)
+        c_1 = setup.commit(self.C)
+
+        print(program.wires())
+        print(self.PI)
 
         # Sanity check that witness fulfils gate constraints
         assert (
@@ -185,7 +217,8 @@ class Prover:
 
         # Expand L0 into the coset extended Lagrange basis
         L0_big = self.fft_expand(
-            Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE)
+            Polynomial([Scalar(1)] + [Scalar(0)] *
+                       (group_order - 1), Basis.LAGRANGE)
         )
 
         # Compute the quotient polynomial (called T(x) in the paper)
@@ -218,7 +251,8 @@ class Prover:
         assert (
             T1.barycentric_eval(fft_cofactor)
             + T2.barycentric_eval(fft_cofactor) * fft_cofactor**group_order
-            + T3.barycentric_eval(fft_cofactor) * fft_cofactor ** (group_order * 2)
+            + T3.barycentric_eval(fft_cofactor) *
+            fft_cofactor ** (group_order * 2)
         ) == QUOT_big.values[0]
 
         print("Generated T1, T2, T3 polynomials")
