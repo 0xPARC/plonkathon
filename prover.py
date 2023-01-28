@@ -99,34 +99,34 @@ class Prover:
 
         padding = [Scalar(0)] * (group_order - len(program.constraints))
 
-        A = Polynomial(
+        self.A = Polynomial(
             [Scalar(witness.get(constraint.wires.L, 0)) for constraint in program.constraints] + padding,
             basis=Basis.LAGRANGE,
         )
-        B = Polynomial(
+        self.B = Polynomial(
             [Scalar(witness.get(constraint.wires.R, 0)) for constraint in program.constraints] + padding,
             basis=Basis.LAGRANGE,
         )
-        C = Polynomial(
+        self.C = Polynomial(
             [Scalar(witness.get(constraint.wires.O, 0)) for constraint in program.constraints] + padding,
             basis=Basis.LAGRANGE,
         )
 
         # Sanity check that witness fulfils gate constraints
         assert (
-            A * self.pk.QL
-            + B * self.pk.QR
-            + A * B * self.pk.QM
-            + C * self.pk.QO
+            self.A * self.pk.QL
+            + self.B * self.pk.QR
+            + self.A * self.B * self.pk.QM
+            + self.C * self.pk.QO
             + self.PI
             + self.pk.QC
             == Polynomial([Scalar(0)] * group_order, Basis.LAGRANGE)
         )
 
         # Return a_1, b_1, c_1
-        a_1 = self.setup.commit(A)
-        b_1 = self.setup.commit(B)
-        c_1 = self.setup.commit(C)
+        a_1 = self.setup.commit(self.A)
+        b_1 = self.setup.commit(self.B)
+        c_1 = self.setup.commit(self.C)
         return Message1(a_1, b_1, c_1)
 
     def round_2(self) -> Message2:
