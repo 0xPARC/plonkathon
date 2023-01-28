@@ -2,12 +2,28 @@
 **PlonKathon** is part of the program for [MIT IAP 2023] [Modern Zero Knowledge Cryptography](https://zkiap.com/). Over the course of this weekend, we will get into the weeds of the PlonK protocol through a series of exercises and extensions. This repository contains a simple python implementation of PlonK adapted from [py_plonk](https://github.com/ethereum/research/tree/master/py_plonk), and targeted to be close to compatible with the implementation at https://zkrepl.dev.
 
 ### Exercises
-#### Prover
+
+Each step of the exercise is accompanied by tests in `test.py` to check your progress.
+
+#### Step 1: Implement setup.py
+
+Implement `Setup.commit` and `Setup.verification_key`.
+
+#### Step 2: Implement prover.py
+
 1. Implement Round 1 of the PlonK prover
 2. Implement Round 2 of the PlonK prover
 3. Implement Round 3 of the PlonK prover
 4. Implement Round 4 of the PlonK prover
 5. Implement Round 5 of the PlonK prover
+
+#### Step 3: Implement verifier.py
+
+Implement `VerificationKey.verify_proof_unoptimized` and `VerificationKey.verify_proof`. See the comments for the differences.
+
+#### Step 4: Pass all the tests!
+
+Pass a number of miscellaneous tests that test your implementation end-to-end.
 
 ### Extensions
 1. Add support for custom gates.
@@ -26,6 +42,11 @@ To get started, you'll need to have a Python version >= 3.8 and [`poetry`](https
 Then, run `poetry install` in the root of the repository. This will install all the dependencies in a virtualenv.
 
 Then, to see the proof system in action, run `poetry run python test.py` from the root of the repository. This will take you through the workflow of setup, proof generation, and verification for several example programs.
+
+The `main` branch contains code stubbed out with comments to guide you through the tests. The `hardcore` branch removes the comments for the more adventurous amongst you. The `reference` branch contains a completed implementation.
+
+For linting and types, the repo also provides `poetry run black .` and `poetry run mypy .` 
+
 ### Compiler
 #### Program
 We specify our program logic in a high-level language involving constraints and variable assignments. Here is a program that lets you prove that you know two small numbers that multiply to a given number (in our example we'll use 91) without revealing what those numbers are:

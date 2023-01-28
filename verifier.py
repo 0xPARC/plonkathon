@@ -67,7 +67,7 @@ class VerificationKey:
         #
         # so at this point we can take a random linear combination of the two
         # checks, and verify it with only one pairing.
-        
+
         return False
 
     # Basic, easier-to-understand version of what's going on
@@ -82,12 +82,12 @@ class VerificationKey:
 
         # Recover the commitment to the linearization polynomial R,
         # exactly the same as what was created by the prover
-        
+
         # Verify that R(z) = 0 and the prover-provided evaluations
         # A(z), B(z), C(z), S1(z), S2(z) are all correct
 
         # Verify that the provided value of Z(zeta*w) is correct
-        
+
         return False
 
     # Compute challenges (should be same as those computed by prover)

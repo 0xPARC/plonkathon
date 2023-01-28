@@ -114,7 +114,7 @@ class Prover:
             + self.pk.QC
             == Polynomial([Scalar(0)] * group_order, Basis.LAGRANGE)
         )
-        
+
         # Return a_1, b_1, c_1
         return Message1(a_1, b_1, c_1)
 
@@ -124,7 +124,7 @@ class Prover:
 
         # Using A, B, C, values, and pk.S1, pk.S2, pk.S3, compute
         # Z_values for permutation grand product polynomial Z
-        # 
+        #
         # Note the convenience function:
         #       self.rlc(val1, val2) = val_1 + self.beta * val_2 + gamma
 
@@ -190,13 +190,13 @@ class Prover:
         # equations are true at all roots of unity {1, w ... w^(n-1)}:
         # 1. All gates are correct:
         #    A * QL + B * QR + A * B * QM + C * QO + PI + QC = 0
-        # 
+        #
         # 2. The permutation accumulator is valid:
         #    Z(wx) = Z(x) * (rlc of A, X, 1) * (rlc of B, 2X, 1) *
         #                   (rlc of C, 3X, 1) / (rlc of A, S1, 1) /
         #                   (rlc of B, S2, 1) / (rlc of C, S3, 1)
         #    rlc = random linear combination: term_1 + beta * term2 + gamma * term3
-        # 
+        #
         # 3. The permutation accumulator equals 1 at the start point
         #    (Z - 1) * L0 = 0
         #    L0 = Lagrange polynomial, equal at all roots of unity except 1
@@ -227,7 +227,7 @@ class Prover:
 
     def round_4(self) -> Message4:
         # Compute evaluations to be used in constructing the linearization polynomial.
- 
+
         # Compute a_eval = A(zeta)
         # Compute b_eval = B(zeta)
         # Compute c_eval = C(zeta)

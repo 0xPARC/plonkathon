@@ -10,17 +10,29 @@ import json
 from test.mini_poseidon import rc, mds, poseidon_hash
 from utils import *
 
+
 def setup_test():
     print("===setup_test===")
 
     setup = Setup.from_file("test/powersOfTau28_hez_final_11.ptau")
-    dummy_values = Polynomial(list(map(Scalar, [1, 2, 3, 4, 5, 6, 7, 8])), Basis.LAGRANGE)
+    dummy_values = Polynomial(
+        list(map(Scalar, [1, 2, 3, 4, 5, 6, 7, 8])), Basis.LAGRANGE
+    )
     program = Program(["c <== a * b"], 8)
     commitment = setup.commit(dummy_values)
-    assert commitment == G1Point((16120260411117808045030798560855586501988622612038310041007562782458075125622, 3125847109934958347271782137825877642397632921923926105820408033549219695465))
+    assert commitment == G1Point(
+        (
+            16120260411117808045030798560855586501988622612038310041007562782458075125622,
+            3125847109934958347271782137825877642397632921923926105820408033549219695465,
+        )
+    )
     vk = setup.verification_key(program.common_preprocessed_input())
-    assert vk.w == 19540430494807482326159819597004422086093766032135589407132600596362845576832
+    assert (
+        vk.w
+        == 19540430494807482326159819597004422086093766032135589407132600596362845576832
+    )
     print("Successfully created dummy commitment and verification key")
+
 
 def basic_test():
     print("===basic_test===")
@@ -119,7 +131,6 @@ def prover_test_dummy_verifier(setup):
     assert vk_test.verify_proof_unoptimized(8, proof, public)
     assert vk_test.verify_proof(8, proof, public)
     print("Prover test with dummy verifier success")
-
 
 
 def prover_test(setup):
@@ -257,7 +268,6 @@ if __name__ == "__main__":
     # Step 2: Pass prover test using verifier we provide (DO NOT READ TEST VERIFIER CODE)
     prover_test_dummy_verifier(setup)
 
-    
     # Step 3: Pass verifier test using your own verifier
     with open("test/proof.pickle", "rb") as f:
         proof = pickle.load(f)
