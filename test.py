@@ -1,3 +1,4 @@
+import pickle
 from compiler.program import Program
 from curve import G1Point
 from poly import Basis, Polynomial
@@ -88,13 +89,22 @@ def prover_test(setup):
     return proof
 
 
-def verifier_test(setup, proof):
+def verifier_test_unoptimized(setup, proof):
     print("Beginning verifier test")
     program = Program(["e public", "c <== a * b", "e <== c * d"], 8)
     public = [60]
     vk = setup.verification_key(program.common_preprocessed_input())
-    assert vk.verify_proof(8, proof, public)
     assert vk.verify_proof_unoptimized(8, proof, public)
+    print("Verifier test success")
+
+
+def verifier_test_full(setup, proof):
+    print("Beginning verifier test")
+    program = Program(["e public", "c <== a * b", "e <== c * d"], 8)
+    public = [60]
+    vk = setup.verification_key(program.common_preprocessed_input())
+    assert vk.verify_proof_unoptimized(8, proof, public)
+    assert vk.verify_proof(8, proof, public)
     print("Verifier test success")
 
 
@@ -186,11 +196,20 @@ def poseidon_test(setup):
 
 
 if __name__ == "__main__":
+    # Step 1: Pass setup test
     setup_test()
+    
+    # Step 2: Pass verifier test
     setup = basic_test()
+    with open("test/proof.pickle", "rb") as f:
+        proof = pickle.load(f)
+    verifier_test_unoptimized(setup, proof)
+    verifier_test_full(setup, proof)
+
+    # Step 3: Pass prover and end-to-end test
     ab_plus_a_test(setup)
     one_public_input_test(setup)
     proof = prover_test(setup)
-    verifier_test(setup, proof)
+    verifier_test_full(setup, proof)
     factorization_test(setup)
     poseidon_test(setup)
