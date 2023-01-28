@@ -1,6 +1,8 @@
 from curve import Scalar
 from enum import Enum
 
+## Lagrange
+# polynomial evaluated at 1, w, w**2, w**3
 
 class Basis(Enum):
     LAGRANGE = 1
