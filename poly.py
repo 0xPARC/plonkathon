@@ -31,10 +31,16 @@ class Polynomial:
             )
         else:
             assert isinstance(other, Scalar)
-            return Polynomial(
-                [x + other for x in self.values],
-                self.basis,
-            )
+            if self.basis == Basis.LAGRANGE:
+                return Polynomial(
+                    [x + other for x in self.values],
+                    self.basis,
+                )
+            else:
+                return Polynomial(
+                    [self.values[0] + other] + self.values[1:],
+                    self.basis
+                )
 
     def __sub__(self, other):
         if isinstance(other, Polynomial):
@@ -47,10 +53,17 @@ class Polynomial:
             )
         else:
             assert isinstance(other, Scalar)
-            return Polynomial(
-                [x - other for x in self.values],
-                self.basis,
-            )
+            if self.basis == Basis.LAGRANGE:
+                return Polynomial(
+                    [x - other for x in self.values],
+                    self.basis,
+                )
+            else:
+                return Polynomial(
+                    [self.values[0] - other] + self.values[1:],
+                    self.basis
+                )
+
 
     def __mul__(self, other):
         if isinstance(other, Polynomial):
@@ -160,7 +173,7 @@ class Polynomial:
         inv_offset = 1 / offset
         return Polynomial(
             [v * inv_offset**i for (i, v) in enumerate(shifted_coeffs)],
-            Basis.LAGRANGE,
+            Basis.MONOMIAL,
         )
 
     # Given a polynomial expressed as a list of evaluations at roots of unity,
