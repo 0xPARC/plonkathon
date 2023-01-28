@@ -30,11 +30,15 @@ class Polynomial:
                 self.basis,
             )
         else:
+            assert self.basis == Basis.LAGRANGE
             assert isinstance(other, Scalar)
             return Polynomial(
                 [x + other for x in self.values],
                 self.basis,
             )
+
+    def __radd__(self, other):
+        return self + other
 
     def __sub__(self, other):
         if isinstance(other, Polynomial):
@@ -68,6 +72,9 @@ class Polynomial:
                 [x * other for x in self.values],
                 self.basis,
             )
+
+    def __rmul__(self, other):
+        return self * other
 
     def __truediv__(self, other):
         if isinstance(other, Polynomial):
@@ -152,7 +159,7 @@ class Polynomial:
         assert self.basis == Basis.LAGRANGE
         group_order = len(self.values)
         x_powers = self.ifft().values
-        x_powers = [(offset**i * x) for i, x in enumerate(x_powers)] + [Scalar(0)] * (
+        x_powers = [(offset ** i * x) for i, x in enumerate(x_powers)] + [Scalar(0)] * (
             group_order * 3
         )
         return Polynomial(x_powers, Basis.MONOMIAL).fft()
@@ -167,8 +174,8 @@ class Polynomial:
         shifted_coeffs = self.ifft().values
         inv_offset = 1 / offset
         return Polynomial(
-            [v * inv_offset**i for (i, v) in enumerate(shifted_coeffs)],
-            Basis.LAGRANGE,
+            [v * inv_offset ** i for (i, v) in enumerate(shifted_coeffs)],
+            Basis.MONOMIAL,
         )
 
     # Given a polynomial expressed as a list of evaluations at roots of unity,
@@ -182,9 +189,9 @@ class Polynomial:
             (Scalar(x) ** order - 1)
             / order
             * sum(
-                [
-                    value * root / (x - root)
-                    for value, root in zip(self.values, roots_of_unity)
-                ]
-            )
+            [
+                value * root / (x - root)
+                for value, root in zip(self.values, roots_of_unity)
+            ]
+        )
         )
