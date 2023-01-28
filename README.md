@@ -16,6 +16,8 @@
 The parts of PlonK that are responsible for ensuring strong privacy are left out of this implementation. See if you can identify them in the [original paper](https://eprint.iacr.org/2019/953.pdf) and add them here.
 3. Add support for lookups.
 A lookup argument allows us to prove that a certain element can be found in a public lookup table. [PlonKup](https://eprint.iacr.org/2022/086.pdf) introduces lookup arguments to PlonK. Try to understand the construction in the paper and implement it here.
+4. Implement Merlin transcript.
+Currently, this implementation uses the [merlin transcript package](https://github.com/nalinbhardwaj/curdleproofs.pie/tree/master/merlin). Learn about the [Merlin transcript construction](https://merlin.cool) and the [STROBE framework](https://www.cryptologie.net/article/416/the-strobe-protocol-framework/) which Merlin is based upon, and then implement the transcript class `MerlinTranscript` yourself!
 
 ## Getting started
 
@@ -251,4 +253,4 @@ The `VerificationKey` contains:
 | $[S_{\sigma2}(x)]_1$     | commitment to the second permutation polynomial $S_{\sigma2}(X)$ |
 | $[S_{\sigma3}(x)]_1$     | commitment to the third permutation polynomial $S_{\sigma3}(X)$  |
 | $[x]_2 = xH$             | (from the $\mathsf{srs}$)                                        |
-| $\omega$                 | an $n$-th root of unity, where $n$ is the program's group order.  |
+| $\omega$                 | an $n$-th root of unity, where $n$ is the program's group order. |
