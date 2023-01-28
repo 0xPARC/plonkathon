@@ -1,4 +1,6 @@
 from compiler.program import Program
+from curve import G1Point
+from poly import Basis, Polynomial
 from setup import Setup
 from prover import Prover
 from verifier import VerificationKey
@@ -6,6 +8,15 @@ import json
 from test.mini_poseidon import rc, mds, poseidon_hash
 from utils import *
 
+def setup_test():
+    setup = Setup.from_file("test/powersOfTau28_hez_final_11.ptau")
+    dummy_values = Polynomial(list(map(Scalar, [1, 2, 3, 4, 5, 6, 7, 8])), Basis.LAGRANGE)
+    program = Program(["c <== a * b"], 8)
+    commitment = setup.commit(dummy_values)
+    assert commitment == G1Point((16120260411117808045030798560855586501988622612038310041007562782458075125622, 3125847109934958347271782137825877642397632921923926105820408033549219695465))
+    vk = setup.verification_key(program.common_preprocessed_input())
+    assert vk.w == 19540430494807482326159819597004422086093766032135589407132600596362845576832
+    print("Successfully created dummy commitment and verification key")
 
 def basic_test():
     # Extract 2^28 powers of tau
@@ -175,6 +186,7 @@ def poseidon_test(setup):
 
 
 if __name__ == "__main__":
+    setup_test()
     setup = basic_test()
     ab_plus_a_test(setup)
     one_public_input_test(setup)
