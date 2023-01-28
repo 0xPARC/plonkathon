@@ -52,6 +52,9 @@ class Prover:
         # Initialise Fiat-Shamir transcript
         transcript = Transcript(b"plonk")
 
+        print(witness)
+        print([x.wires for x in self.program.constraints])
+
         # Collect fixed and public information
         # FIXME: Hash pk and PI into transcript
         public_vars = self.program.get_public_assignments()
@@ -94,18 +97,36 @@ class Prover:
         if None not in witness:
             witness[None] = 0
 
+        padding = [Scalar(0)] * (group_order - len(program.constraints))
+
+        A = Polynomial(
+            [Scalar(witness.get(constraint.wires.L, 0)) for constraint in program.constraints] + padding,
+            basis=Basis.LAGRANGE,
+        )
+        B = Polynomial(
+            [Scalar(witness.get(constraint.wires.R, 0)) for constraint in program.constraints] + padding,
+            basis=Basis.LAGRANGE,
+        )
+        C = Polynomial(
+            [Scalar(witness.get(constraint.wires.O, 0)) for constraint in program.constraints] + padding,
+            basis=Basis.LAGRANGE,
+        )
+
         # Sanity check that witness fulfils gate constraints
         assert (
-            self.A * self.pk.QL
-            + self.B * self.pk.QR
-            + self.A * self.B * self.pk.QM
-            + self.C * self.pk.QO
+            A * self.pk.QL
+            + B * self.pk.QR
+            + A * B * self.pk.QM
+            + C * self.pk.QO
             + self.PI
             + self.pk.QC
             == Polynomial([Scalar(0)] * group_order, Basis.LAGRANGE)
         )
 
         # Return a_1, b_1, c_1
+        a_1 = self.setup.commit(A)
+        b_1 = self.setup.commit(B)
+        c_1 = self.setup.commit(C)
         return Message1(a_1, b_1, c_1)
 
     def round_2(self) -> Message2:
@@ -118,16 +139,16 @@ class Prover:
         # Sanity-check that Z was computed correctly
         for i in range(group_order):
             assert (
-                self.rlc(self.A.values[i], roots_of_unity[i])
-                * self.rlc(self.B.values[i], 2 * roots_of_unity[i])
-                * self.rlc(self.C.values[i], 3 * roots_of_unity[i])
-            ) * Z_values[i] - (
-                self.rlc(self.A.values[i], self.pk.S1.values[i])
-                * self.rlc(self.B.values[i], self.pk.S2.values[i])
-                * self.rlc(self.C.values[i], self.pk.S3.values[i])
-            ) * Z_values[
-                (i + 1) % group_order
-            ] == 0
+                       self.rlc(self.A.values[i], roots_of_unity[i])
+                       * self.rlc(self.B.values[i], 2 * roots_of_unity[i])
+                       * self.rlc(self.C.values[i], 3 * roots_of_unity[i])
+                   ) * Z_values[i] - (
+                       self.rlc(self.A.values[i], self.pk.S1.values[i])
+                       * self.rlc(self.B.values[i], self.pk.S2.values[i])
+                       * self.rlc(self.C.values[i], self.pk.S3.values[i])
+                   ) * Z_values[
+                       (i + 1) % group_order
+                       ] == 0
 
         # Return z_1
         return Message2(z_1)
@@ -150,10 +171,10 @@ class Prover:
 
         # Sanity check that we've computed T1, T2, T3 correctly
         assert (
-            T1.barycentric_eval(fft_cofactor)
-            + T2.barycentric_eval(fft_cofactor) * fft_cofactor**group_order
-            + T3.barycentric_eval(fft_cofactor) * fft_cofactor ** (group_order * 2)
-        ) == QUOT_big.values[0]
+                   T1.barycentric_eval(fft_cofactor)
+                   + T2.barycentric_eval(fft_cofactor) * fft_cofactor ** group_order
+                   + T3.barycentric_eval(fft_cofactor) * fft_cofactor ** (group_order * 2)
+               ) == QUOT_big.values[0]
 
         print("Generated T1, T2, T3 polynomials")
 
