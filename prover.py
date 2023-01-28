@@ -181,7 +181,7 @@ class Prover:
         
         # Expand L0 into the coset extended Lagrange basis
         L0_big = self.fft_expand(
-            Polynomial([Scalar(0), Scalar(1)] + [Scalar(0)] * (group_order - 2), Basis.LAGRANGE)
+            Polynomial([Scalar(1), Scalar(0)] + [Scalar(0)] * (group_order - 2), Basis.LAGRANGE)
         )
         Xpoly = Polynomial(Scalar.roots_of_unity(group_order), basis=Basis.LAGRANGE)
         
