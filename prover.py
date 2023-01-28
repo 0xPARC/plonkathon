@@ -149,7 +149,7 @@ class Prover:
                 * self.rlc(self.C.values[i], self.pk.S3.values[i])
             )
             Z_values.append(q1 * Z_values[i] / q2)
-        #assert Z_values.pop() == 1
+        assert Z_values.pop() == 1
 
         print(roots_of_unity)
 
@@ -168,18 +168,54 @@ class Prover:
                        ] == 0
 
         # Return z_1
-        z_1 = self.setup.commit(Polynomial(Z_values, basis=Basis.LAGRANGE))
+        self.Z = Polynomial(Z_values, basis=Basis.LAGRANGE)
+        z_1 = self.setup.commit(self.Z)
         return Message2(z_1)
 
     def round_3(self) -> Message3:
         group_order = self.group_order
         setup = self.setup
+        fft_cofactor = self.fft_cofactor
+        roots_of_unity = Scalar.roots_of_unity(group_order)
 
         # Expand L0 into the coset extended Lagrange basis
         L0_big = self.fft_expand(
             Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE)
         )
+        Xpoly = Polynomial(Scalar.roots_of_unity(group_order), basis=Basis.LAGRANGE)
+        Zh = Polynomial([Scalar(-1)] + [Scalar(0)]*(group_order - 1), Basis.MONOMIAL)
+        Zh = Zh.fft()
+        assert self.Z.basis == Basis.LAGRANGE
+        Z_xomega = self.Z.ifft()
+        assert Z_xomega.basis == Basis.MONOMIAL
+        for i in range(len(Z_xomega.values)):
+            Z_xomega.values[i] *= roots_of_unity[i % group_order]
+        Z_xomega = Z_xomega.fft()
+        assert Z_xomega.basis == Basis.LAGRANGE
+       
+        self.PI = self.PI.to_coset_extended_lagrange(fft_cofactor)
+        self.A = self.A.to_coset_extended_lagrange(fft_cofactor)
+        self.B = self.B.to_coset_extended_lagrange(fft_cofactor)
+        self.C = self.C.to_coset_extended_lagrange(fft_cofactor)
+        self.Z = self.Z.to_coset_extended_lagrange(fft_cofactor)
+        Z_xomega = Z_xomega.to_coset_extended_lagrange(fft_cofactor)
+        Xpoly = Xpoly.to_coset_extended_lagrange(fft_cofactor)
+        self.pk.S1 = self.pk.S1.to_coset_extended_lagrange(fft_cofactor)
+        self.pk.S2 = self.pk.S2.to_coset_extended_lagrange(fft_cofactor)
+        self.pk.S3 = self.pk.S3.to_coset_extended_lagrange(fft_cofactor)
+        self.pk.QO = self.pk.QO.to_coset_extended_lagrange(fft_cofactor)
+        self.pk.QM = self.pk.QM.to_coset_extended_lagrange(fft_cofactor)
+        self.pk.QL = self.pk.QL.to_coset_extended_lagrange(fft_cofactor)
+        self.pk.QR = self.pk.QR.to_coset_extended_lagrange(fft_cofactor)
+        self.pk.QC = self.pk.QC.to_coset_extended_lagrange(fft_cofactor)
+        Zh = Zh.to_coset_extended_lagrange(fft_cofactor)
+        
+        QUOT_big = ((self.A * self.B * self.pk.QM + self.A * self.pk.QL + self.B * self.pk.QR + self.C * self.pk.QO + self.PI + self.pk.QC) + \
+            (self.rlc(self.A, Xpoly)) * (self.rlc(self.B, Xpoly * Scalar(2))) * (self.rlc(self.C, Xpoly * Scalar(3))) * self.Z * self.alpha - \
+            (self.rlc(self.A, self.pk.S1)) * (self.rlc(self.B, self.pk.S2)) * (self.rlc(self.C, self.pk.S3) * Z_xomega) * self.alpha 
+            + (self.Z - Scalar(1)) * L0_big * self.alpha * self.alpha) / Zh
 
+        print(self.expanded_evals_to_coeffs(QUOT_big).values)
         # Sanity check: QUOT has degree < 3n
         assert (
             self.expanded_evals_to_coeffs(QUOT_big).values[-group_order:]
@@ -187,6 +223,10 @@ class Prover:
         )
         print("Generated the quotient polynomial")
 
+        quot = self.expanded_evals_to_coeffs(QUOT_big)
+        T1 = Polynomial(quot.values[:group_order], basis=Basis.MONOMIAL).fft()
+        T2 = Polynomial(quot.values[group_order:group_order*2], basis=Basis.MONOMIAL).fft()
+        T3 = Polynomial(quot.values[group_order*2:group_order*3], basis=Basis.MONOMIAL).fft()
         # Sanity check that we've computed T1, T2, T3 correctly
         assert (
                    T1.barycentric_eval(fft_cofactor)
@@ -195,12 +235,31 @@ class Prover:
                ) == QUOT_big.values[0]
 
         print("Generated T1, T2, T3 polynomials")
-
+        print(T1.values)
+        print(T2.values)
+        print(T3.values)
+        t_lo_1 = setup.commit(T1)
+        t_mid_1 = setup.commit(T2)
+        t_hi_1 = setup.commit(T3)
+        print(t_lo_1, t_mid_1, t_hi_1)
         # Return t_lo_1, t_mid_1, t_hi_1
         return Message3(t_lo_1, t_mid_1, t_hi_1)
 
     def round_4(self) -> Message4:
+        assert self.A.basis == Basis.LAGRANGE
+        assert self.B.basis == Basis.LAGRANGE
+        assert self.C.basis == Basis.LAGRANGE
+        assert self.pk.S1.basis == Basis.LAGRANGE
+        assert self.pk.S2.basis == Basis.LAGRANGE
+        assert self.Z.basis == Basis.LAGRANGE
+        a_eval = self.A.barycentric_eval(self.zeta)
+        b_eval = self.B.barycentric_eval(self.zeta)
+        c_eval = self.C.barycentric_eval(self.zeta)
+        s1_eval = self.pk.S1.barycentric_eval(self.zeta)
+        s2_eval = self.pk.S2.barycentric_eval(self.zeta)
 
+        root_of_unity = Scalar.root_of_unity(self.group_order)
+        z_shifted_eval = self.Z.barycentric_eval(self.zeta * root_of_unity)
         # Return a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval
         return Message4(a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval)
 

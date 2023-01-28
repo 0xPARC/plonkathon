@@ -134,6 +134,14 @@ class Polynomial:
     def ifft(self):
         return self.fft(True)
 
+    def pad(self, length):
+        if self.basis == Basis.LAGRANGE:
+            p = self.ifft()
+        else:
+            p = Polynomial(self.values, Basis.MONOMIAL)
+        p.values += [Scalar(0)] * (length - len(self.values))
+        return p.fft()
+
     # Converts a list of evaluations at [1, w, w**2... w**(n-1)] to
     # a list of evaluations at
     # [offset, offset * q, offset * q**2 ... offset * q**(4n-1)] where q = w**(1/4)
