@@ -208,7 +208,7 @@ class Prover:
         )
         print("Generated the quotient polynomial")
 
-        # Split up T into T1, T2 and T3 (needed because T has degree 3n - 3, so is
+        # Split up T into T1, T2 and T3 (needed because T has degree 3n - 4, so is
         # too big for the trusted setup)
 
         # Sanity check that we've computed T1, T2, T3 correctly
