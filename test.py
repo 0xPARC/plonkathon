@@ -11,6 +11,8 @@ from test.mini_poseidon import rc, mds, poseidon_hash
 from utils import *
 
 def setup_test():
+    print("===setup_test===")
+
     setup = Setup.from_file("test/powersOfTau28_hez_final_11.ptau")
     dummy_values = Polynomial(list(map(Scalar, [1, 2, 3, 4, 5, 6, 7, 8])), Basis.LAGRANGE)
     program = Program(["c <== a * b"], 8)
@@ -21,6 +23,8 @@ def setup_test():
     print("Successfully created dummy commitment and verification key")
 
 def basic_test():
+    print("===basic_test===")
+
     # Extract 2^28 powers of tau
     setup = Setup.from_file("test/powersOfTau28_hez_final_11.ptau")
     print("Extracted setup")
@@ -49,6 +53,8 @@ def basic_test():
 #    c <== a * b + a;
 # }
 def ab_plus_a_test(setup):
+    print("===ab_plus_a_test===")
+
     program = Program(["ab === a - c", "-ab === a * b"], 8)
     vk = setup.verification_key(program.common_preprocessed_input())
     print("Generated verification key")
@@ -65,6 +71,8 @@ def ab_plus_a_test(setup):
 
 
 def one_public_input_test(setup):
+    print("===one_public_input_test===")
+
     program = Program(["c public", "c === a * b"], 8)
     vk = setup.verification_key(program.common_preprocessed_input())
     print("Generated verification key")
@@ -81,6 +89,8 @@ def one_public_input_test(setup):
 
 
 def prover_test_dummy_verifier(setup):
+    print("===prover_test_dummy_verifier===")
+
     print("Beginning prover test with test verifier")
     program = Program(["e public", "c <== a * b", "e <== c * d"], 8)
     assignments = {"a": 3, "b": 4, "c": 12, "d": 5, "e": 60}
@@ -113,6 +123,8 @@ def prover_test_dummy_verifier(setup):
 
 
 def prover_test(setup):
+    print("===prover_test===")
+
     print("Beginning prover test")
     program = Program(["e public", "c <== a * b", "e <== c * d"], 8)
     assignments = {"a": 3, "b": 4, "c": 12, "d": 5, "e": 60}
@@ -123,6 +135,8 @@ def prover_test(setup):
 
 
 def verifier_test_unoptimized(setup, proof):
+    print("===verifier_test_unoptimized===")
+
     print("Beginning verifier test")
     program = Program(["e public", "c <== a * b", "e <== c * d"], 8)
     public = [60]
@@ -132,6 +146,8 @@ def verifier_test_unoptimized(setup, proof):
 
 
 def verifier_test_full(setup, proof):
+    print("===verifier_test_full===")
+
     print("Beginning verifier test")
     program = Program(["e public", "c <== a * b", "e <== c * d"], 8)
     public = [60]
@@ -142,6 +158,8 @@ def verifier_test_full(setup, proof):
 
 
 def factorization_test(setup):
+    print("===factorization_test===")
+
     print("Beginning test: prove you know small integers that multiply to 91")
     program = Program.from_str(
         """n public
@@ -211,6 +229,8 @@ def output_proof_lang() -> str:
 
 
 def poseidon_test(setup):
+    print("===poseidon_test===")
+
     # PLONK-prove the correctness of a Poseidon execution. Note that this is
     # a very suboptimal way to do it: an optimized implementation would use
     # a custom PLONK gate to do a round in a single gate
@@ -234,17 +254,17 @@ if __name__ == "__main__":
 
     setup = basic_test()
 
-    # Step 2: Pass prover test using Test verifier (DO NOT READ TEST VERIFIER CODE)
+    # Step 2: Pass prover test using verifier we provide (DO NOT READ TEST VERIFIER CODE)
     prover_test_dummy_verifier(setup)
 
     
-    # Step 3: Pass verifier test
+    # Step 3: Pass verifier test using your own verifier
     with open("test/proof.pickle", "rb") as f:
         proof = pickle.load(f)
     verifier_test_unoptimized(setup, proof)
     verifier_test_full(setup, proof)
 
-    # Step 4: Pass end-to-end tests
+    # Step 4: Pass end-to-end tests for prover and verifier
     ab_plus_a_test(setup)
     one_public_input_test(setup)
     proof = prover_test(setup)
