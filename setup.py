@@ -73,4 +73,16 @@ class Setup(object):
     # Generate the verification key for this program with the given setup
     def verification_key(self, pk: CommonPreprocessedInput) -> VerificationKey:
         # Create the appropriate VerificationKey object
-        return NotImplemented
+        return VerificationKey(
+            pk.group_order,
+            self.commit(pk.QM),
+            self.commit(pk.QL),
+            self.commit(pk.QR),
+            self.commit(pk.QO),
+            self.commit(pk.QC),
+            self.commit(pk.S1),
+            self.commit(pk.S2),
+            self.commit(pk.S3),
+            self.X2,
+            Scalar.root_of_unity(pk.group_order),
+        )
