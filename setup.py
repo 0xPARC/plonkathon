@@ -1,6 +1,6 @@
 from utils import *
 import py_ecc.bn128 as b
-from curve import ec_lincomb, G1Point, G2Point
+from curve import ec_lincomb, lincomb, G1Point, G2Point
 from compiler.program import CommonPreprocessedInput
 from verifier import VerificationKey
 from dataclasses import dataclass
@@ -69,9 +69,22 @@ class Setup(object):
         # Run inverse FFT to convert values from Lagrange basis to monomial basis
         # Optional: Check values size does not exceed maximum power setup can handle
         # Compute linear combination of setup with values
-        return NotImplemented
+
+        deg = len(values.values)
+        assert (deg & (deg-1) == 0)
+
+        coeffs = values.ifft()
+        pairs = list(zip(self.powers_of_x, coeffs.values))
+        result = ec_lincomb(pairs)
+
+        return result
 
     # Generate the verification key for this program with the given setup
     def verification_key(self, pk: CommonPreprocessedInput) -> VerificationKey:
         # Create the appropriate VerificationKey object
-        return NotImplemented
+        vk = VerificationKey (
+            group_order = pk.group_order,
+            
+        )
+
+        return vk
