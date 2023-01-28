@@ -66,9 +66,6 @@ class Setup(object):
     def commit(self, values: Polynomial) -> G1Point:
         assert values.basis == Basis.LAGRANGE
 
-        # Run inverse FFT to convert values from Lagrange basis to monomial basis
-        # Optional: Check values size does not exceed maximum power setup can handle
-        # Compute linear combination of setup with values
         return NotImplemented
 
     # Generate the verification key for this program with the given setup
