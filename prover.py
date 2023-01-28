@@ -54,6 +54,8 @@ class Prover:
 
         # Collect fixed and public information
         # FIXME: Hash pk and PI into transcript
+        ## Checking step 1 - that inputs were encoded correctly
+        # polynomial of public inputes
         public_vars = self.program.get_public_assignments()
         PI = Polynomial(
             [Scalar(-witness[v]) for v in public_vars]
@@ -98,11 +100,12 @@ class Prover:
         # - A_values: witness[program.wires()[i].L]
         # - B_values: witness[program.wires()[i].R]
         # - C_values: witness[program.wires()[i].O]
-
+        a = 
         # Construct A, B, C Lagrange interpolation polynomials for
         # A_values, B_values, C_values
 
         # Compute a_1, b_1, c_1 commitments to A, B, C polynomials
+
 
         # Sanity check that witness fulfils gate constraints
         assert (
