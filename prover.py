@@ -177,43 +177,58 @@ class Prover:
         setup = self.setup
         fft_cofactor = self.fft_cofactor
         roots_of_unity = Scalar.roots_of_unity(group_order)
-
+        alpha = self.alpha
+        
         # Expand L0 into the coset extended Lagrange basis
         L0_big = self.fft_expand(
-            Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE)
+            Polynomial([Scalar(0), Scalar(1)] + [Scalar(0)] * (group_order - 2), Basis.LAGRANGE)
         )
         Xpoly = Polynomial(Scalar.roots_of_unity(group_order), basis=Basis.LAGRANGE)
-        Zh = Polynomial([Scalar(-1)] + [Scalar(0)]*(group_order - 1), Basis.MONOMIAL)
-        Zh = Zh.fft()
+        
         assert self.Z.basis == Basis.LAGRANGE
         Z_xomega = self.Z.ifft()
         assert Z_xomega.basis == Basis.MONOMIAL
         for i in range(len(Z_xomega.values)):
-            Z_xomega.values[i] *= roots_of_unity[i % group_order]
+            Z_xomega.values[i] *= roots_of_unity[i]
         Z_xomega = Z_xomega.fft()
         assert Z_xomega.basis == Basis.LAGRANGE
        
-        self.PI = self.PI.to_coset_extended_lagrange(fft_cofactor)
-        self.A = self.A.to_coset_extended_lagrange(fft_cofactor)
-        self.B = self.B.to_coset_extended_lagrange(fft_cofactor)
-        self.C = self.C.to_coset_extended_lagrange(fft_cofactor)
-        self.Z = self.Z.to_coset_extended_lagrange(fft_cofactor)
-        Z_xomega = Z_xomega.to_coset_extended_lagrange(fft_cofactor)
-        Xpoly = Xpoly.to_coset_extended_lagrange(fft_cofactor)
-        self.pk.S1 = self.pk.S1.to_coset_extended_lagrange(fft_cofactor)
-        self.pk.S2 = self.pk.S2.to_coset_extended_lagrange(fft_cofactor)
-        self.pk.S3 = self.pk.S3.to_coset_extended_lagrange(fft_cofactor)
-        self.pk.QO = self.pk.QO.to_coset_extended_lagrange(fft_cofactor)
-        self.pk.QM = self.pk.QM.to_coset_extended_lagrange(fft_cofactor)
-        self.pk.QL = self.pk.QL.to_coset_extended_lagrange(fft_cofactor)
-        self.pk.QR = self.pk.QR.to_coset_extended_lagrange(fft_cofactor)
-        self.pk.QC = self.pk.QC.to_coset_extended_lagrange(fft_cofactor)
-        Zh = Zh.to_coset_extended_lagrange(fft_cofactor)
-        
-        QUOT_big = ((self.A * self.B * self.pk.QM + self.A * self.pk.QL + self.B * self.pk.QR + self.C * self.pk.QO + self.PI + self.pk.QC) + \
-            (self.rlc(self.A, Xpoly)) * (self.rlc(self.B, Xpoly * Scalar(2))) * (self.rlc(self.C, Xpoly * Scalar(3))) * self.Z * self.alpha - \
-            (self.rlc(self.A, self.pk.S1)) * (self.rlc(self.B, self.pk.S2)) * (self.rlc(self.C, self.pk.S3) * Z_xomega) * self.alpha 
-            + (self.Z - Scalar(1)) * L0_big * self.alpha * self.alpha) / Zh
+        PI = self.fft_expand(self.PI)
+        A = self.fft_expand(self.A)
+        B = self.fft_expand(self.B)
+        C = self.fft_expand(self.C)
+        Z = self.fft_expand(self.Z)
+
+        Z_xomega = self.fft_expand(Z_xomega)
+        Xpoly = self.fft_expand(Xpoly)
+
+        S1 = self.fft_expand(self.pk.S1)
+        S2 = self.fft_expand(self.pk.S2)
+        S3 = self.fft_expand(self.pk.S3)
+        QO = self.fft_expand(self.pk.QO)
+        QM = self.fft_expand(self.pk.QM)
+        QL = self.fft_expand(self.pk.QL)
+        QR = self.fft_expand(self.pk.QR)
+        QC = self.fft_expand(self.pk.QC)
+
+        x_powers = [Scalar(-1)] + [0] * 7 + [Scalar(1)] + [0] * 23
+        x_powers = [(fft_cofactor**i * x) for i, x in enumerate(x_powers)]
+        Zh = Polynomial(x_powers, basis=Basis.MONOMIAL).fft()
+        print(Zh.values)
+
+        q1 = (A * B * QM + A * QL + B * QR + C * QO + PI + QC) / Zh
+        q2 = (self.rlc(A, Xpoly)) * (self.rlc(B, Xpoly * Scalar(2))) * (self.rlc(C, Xpoly * Scalar(3))) * Z * alpha / Zh
+        q3 = (self.rlc(A, S1)) * (self.rlc(B, S2)) * (self.rlc(C, S3) * Z_xomega) * alpha / Zh
+        q4 = (Z - Scalar(1)) * L0_big * alpha * alpha / Zh
+        QUOT_big = q1 + q2 - q3 + q4
+        # print(self.expanded_evals_to_coeffs(q1).values[-group_order:])
+        # print(self.expanded_evals_to_coeffs(q2).values[-group_order:])
+        # print(self.expanded_evals_to_coeffs(q3).values[-group_order:])
+        # print(self.expanded_evals_to_coeffs(q4).values[-group_order:])
+        # QUOT_big = ((self.A * self.B * self.pk.QM + self.A * self.pk.QL + self.B * self.pk.QR + self.C * self.pk.QO + self.PI + self.pk.QC) + \
+        #     (self.rlc(self.A, Xpoly)) * (self.rlc(self.B, Xpoly * Scalar(2))) * (self.rlc(self.C, Xpoly * Scalar(3))) * self.Z * self.alpha - \
+        #     (self.rlc(self.A, self.pk.S1)) * (self.rlc(self.B, self.pk.S2)) * (self.rlc(self.C, self.pk.S3) * Z_xomega) * self.alpha 
+        #     + (self.Z - Scalar(1)) * L0_big * self.alpha * self.alpha) / Zh
 
         print(self.expanded_evals_to_coeffs(QUOT_big).values)
         # Sanity check: QUOT has degree < 3n
