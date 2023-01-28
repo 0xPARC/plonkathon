@@ -1,4 +1,5 @@
 import pickle
+from TESTING_verifier_DO_NOT_OPEN import TestingVerificationKey
 from compiler.program import Program
 from curve import G1Point
 from poly import Basis, Polynomial
@@ -77,6 +78,38 @@ def one_public_input_test(setup):
             )
     assert getattr(vk, "w") == int(their_output["w"])
     print("One public input test success")
+
+
+def prover_test_dummy_verifier(setup):
+    print("Beginning prover test with test verifier")
+    program = Program(["e public", "c <== a * b", "e <== c * d"], 8)
+    assignments = {"a": 3, "b": 4, "c": 12, "d": 5, "e": 60}
+    prover = Prover(setup, program)
+    proof = prover.prove(assignments)
+
+    print("Beginning test verification")
+    program = Program(["e public", "c <== a * b", "e <== c * d"], 8)
+    public = [60]
+    vk = setup.verification_key(program.common_preprocessed_input())
+
+    vk_test = TestingVerificationKey(
+        group_order=vk.group_order,
+        Qm=vk.Qm,
+        Ql=vk.Ql,
+        Qr=vk.Qr,
+        Qo=vk.Qo,
+        Qc=vk.Qc,
+        S1=vk.S1,
+        S2=vk.S2,
+        S3=vk.S3,
+        X_2=vk.X_2,
+        w=vk.w,
+    )
+
+    assert vk_test.verify_proof_unoptimized(8, proof, public)
+    assert vk_test.verify_proof(8, proof, public)
+    print("Prover test with dummy verifier success")
+
 
 
 def prover_test(setup):
@@ -198,15 +231,20 @@ def poseidon_test(setup):
 if __name__ == "__main__":
     # Step 1: Pass setup test
     setup_test()
-    
-    # Step 2: Pass verifier test
+
     setup = basic_test()
+
+    # Step 2: Pass prover test using Test verifier (DO NOT READ TEST VERIFIER CODE)
+    prover_test_dummy_verifier(setup)
+
+    
+    # Step 3: Pass verifier test
     with open("test/proof.pickle", "rb") as f:
         proof = pickle.load(f)
     verifier_test_unoptimized(setup, proof)
     verifier_test_full(setup, proof)
 
-    # Step 3: Pass prover and end-to-end test
+    # Step 4: Pass end-to-end tests
     ab_plus_a_test(setup)
     one_public_input_test(setup)
     proof = prover_test(setup)
