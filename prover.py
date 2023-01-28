@@ -163,8 +163,23 @@ class Prover:
         # Note the convenience function:
         #       self.rlc(val1, val2) = val_1 + self.beta * val_2 + gamma
 
+        print("BEFORE ASSERT")
+        roots_of_unity = Scalar.roots_of_unity(group_order)
+
+        Z_values = [1]
+        # POTENTIAL OFF BY 1
+        for i in range(1, group_order + 1):
+            numer = self.rlc(self.A.values[i - 1], roots_of_unity[i - 1]) * self.rlc(
+                self.B.values[i - 1], 2 * roots_of_unity[i - 1]) * self.rlc(self.C.values[i - 1], 3 * roots_of_unity[i - 1])
+            deno = self.rlc(self.A.values[i - 1], self.pk.S1.values[i - 1]) * self.rlc(
+                self.B.values[i - 1], self.pk.S2.values[i - 1]) * self.rlc(self.C.values[i - 1], self.pk.S3.values[i - 1])
+            Z_values.append(Z_values[-1] * numer / deno)
+        print(Z_values)
+
         # Check that the last term Z_n = 1
         assert Z_values.pop() == 1
+
+        numer * (numer / deno) - deno
 
         # Sanity-check that Z was computed correctly
         for i in range(group_order):
@@ -179,6 +194,7 @@ class Prover:
             ) * Z_values[
                 (i + 1) % group_order
             ] == 0
+        print("AFTER ASSERT")
 
         # Construct Z, Lagrange interpolation polynomial for Z_values
         # Cpmpute z_1 commitment to Z polynomial
