@@ -48,6 +48,7 @@ class Prover:
     PI: Polynomial
     beta: Scalar
     gamma: Scalar
+    zeta: Scalar
     fft_cofactor: Scalar
     alpha: Scalar
 
@@ -78,6 +79,8 @@ class Prover:
         # Round 2
         msg_2 = self.round_2()
         self.alpha, self.fft_cofactor = transcript.round_2(msg_2)
+        print("alpha")
+        print(self.alpha)
 
         # Round 3
         msg_3 = self.round_3()
@@ -221,11 +224,10 @@ class Prover:
 
         # TODO: have to use fft_expand instead of generating 32 roots of unity to prevent div by 0
         roots_of_unity = Scalar.roots_of_unity(group_order)
-        p_omega = Polynomial(roots_of_unity, Basis.LAGRANGE)
-        expanded_rou = self.fft_expand(p_omega)
-
-        print("expanded_rou")
-        print(expanded_rou)
+        # p_omega = Polynomial(roots_of_unity, Basis.LAGRANGE)
+        # expanded_rou = self.fft_expand(p_omega)
+        expanded_rou = Scalar.roots_of_unity(4*group_order)
+        # print(expanded_rou)
 
         # Using self.fft_expand, move A, B, C into coset extended Lagrange basis
 
@@ -252,15 +254,20 @@ class Prover:
         expanded_Z = self.fft_expand(self.Z)
 
         # Expand shifted Z(ω) into coset extended Lagrange basis
-        results_shifted = []
-        results = []
-        for r in range(len(expanded_rou.values)):
-            results.append(expanded_Z.barycentric_eval(expanded_rou.values[r]))
-            results_shifted.append(expanded_Z.barycentric_eval(
-                expanded_rou.values[(r + 1) % group_order]))
+        # results_shifted = []
+        # results = []
+        # for r in range(len(expanded_rou)):
+        #     results.append(expanded_Z.barycentric_eval(expanded_rou[r]))
+        #     results_shifted.append(expanded_Z.barycentric_eval(
+        #         expanded_rou[(r + 1) % group_order]))
         # create a polynomial
 
-        shifted_Z = Polynomial(results_shifted, Basis.LAGRANGE)
+        # shifted_Z = Polynomial(results_shifted, Basis.LAGRANGE)
+        shifted_Z = expanded_Z.shift(4)
+
+        print("expanded_Z")
+        print(expanded_Z.values)
+
 
         # Expand permutation polynomials pk.S1, pk.S2, pk.S3 into coset
         # extended Lagrange basis
@@ -271,8 +278,16 @@ class Prover:
 
         # Compute Z_H = X^N - 1, also in evaluation form in the coset
 
-        Z_H = Polynomial([Scalar(0)
-                         for _ in range(group_order)], Basis.LAGRANGE)
+        # TODO: why do we multiply by fft_cofactor??? everything else is expanded by the cofactor
+        # why does it have to be in fft_cofactor land? because rou are small
+
+        fft_cofactor = self.fft_cofactor
+
+        Z_H = Polynomial([(((self.fft_cofactor*Scalar(x)) ** group_order) - 1)
+                         for x in expanded_rou], Basis.LAGRANGE)
+
+        print("Z_H")
+        print(Z_H.values)
 
         # Compute L0, the Lagrange basis polynomial that evaluates to 1 at x = 1 = ω^0
         # and 0 at other roots of unity
@@ -286,24 +301,40 @@ class Prover:
                        (group_order - 1), Basis.LAGRANGE)
         )
 
-        X = Polynomial(roots_of_unity, Basis.LAGRANGE)
+        X = Polynomial(expanded_rou, Basis.LAGRANGE)
+        two_X = Polynomial([Scalar(2)* x for x in expanded_rou], Basis.LAGRANGE)
+        three_X = Polynomial([Scalar(3)* x for x in expanded_rou], Basis.LAGRANGE)
+
 
         # Compute the quotient polynomial (called T(x) in the paper)
         # TODO: might have to do modular inverse?
+
+        # def rlc(self, term_1, term_2):
+        #     return term_1 + term_2 * self.beta + self.gamma
+
         QUOT_big = (
             (expanded_A*expanded_B*expanded_QM + expanded_A*expanded_QL + expanded_B*expanded_QR + expanded_C*expanded_QO + expanded_PI + expanded_QC) 
-            / Z_H
-            ) + (
-            (expanded_A + self.beta*X + self.gamma)
-            * (expanded_B + self.beta*Scalar(2) + self.gamma)
-            * (expanded_C + self.beta*Scalar(3)*X + self.gamma)
+            # (expanded_A + self.beta*X + self.gamma)
+            + 
+            ((self.rlc(expanded_A, X* fft_cofactor)
+            # * (expanded_B + self.beta*Scalar(2) + self.gamma)
+            * self.rlc(expanded_B, two_X*fft_cofactor)
+            # * (expanded_C + self.beta*Scalar(3)*X + self.gamma)
+            * self.rlc(expanded_C, three_X*fft_cofactor)
             * expanded_Z
-            ) * self.alpha - Z_H - (
-            (expanded_A + self.beta*expanded_S1 + self.gamma)
-            *(expanded_B + self.beta*expanded_S1 + self.gamma)
-            *(expanded_C + self.beta*expanded_S3 + self.gamma) 
+            ) * self.alpha)
+            - 
+            ((
+            # (expanded_A + self.beta*expanded_S1 + self.gamma)
+            self.rlc(expanded_A, expanded_S1)
+            # *(expanded_B + self.beta*expanded_S2 + self.gamma)
+            * self.rlc(expanded_B, expanded_S2)
+            # *(expanded_C + self.beta*expanded_S3 + self.gamma) 
+            * self.rlc(expanded_C, expanded_S3)
             * shifted_Z
-            ) * self.alpha * Z_H + (expanded_Z - 1) * L0_big * (self.alpha * self.alpha)/Z_H
+            ) * (self.alpha)) 
+            + 
+            ((expanded_Z - Scalar(1)) * L0_big * (self.alpha * self.alpha)))/Z_H
 
 
 
@@ -323,6 +354,8 @@ class Prover:
         #    L0 = Lagrange polynomial, equal at all roots of unity except 1
 
         # Sanity check: QUOT has degree < 3n
+        print(self.expanded_evals_to_coeffs(QUOT_big).values)
+        # print(self.expanded_evals_to_coeffs(QUOT_big).values[-group_order:])
         assert (
             self.expanded_evals_to_coeffs(QUOT_big).values[-group_order:]
             == [0] * group_order
@@ -332,7 +365,12 @@ class Prover:
         # Split up T into T1, T2 and T3 (needed because T has degree 3n, so is
         # too big for the trusted setup)
 
-        T1 = 
+        QUOT_coeffs = QUOT_big.coset_extended_lagrange_to_coeffs(fft_cofactor)
+
+
+        T1 = Polynomial(QUOT_coeffs.values[0: group_order], Basis.MONOMIAL).fft()
+        T2 = Polynomial(QUOT_coeffs.values[group_order:2*group_order], Basis.MONOMIAL).fft()
+        T3 = Polynomial(QUOT_coeffs.values[2*group_order: 3*group_order], Basis.MONOMIAL).fft()
 
         # Sanity check that we've computed T1, T2, T3 correctly
         assert (
@@ -346,6 +384,10 @@ class Prover:
 
         # Compute commitments t_lo_1, t_mid_1, t_hi_1 to T1, T2, T3 polynomials
 
+        t_lo_1 = setup.commit(T1)
+        t_mid_1 = setup.commit(T2)
+        t_hi_1 = setup.commit(T3)
+
         # Return t_lo_1, t_mid_1, t_hi_1
         return Message3(t_lo_1, t_mid_1, t_hi_1)
 
@@ -353,6 +395,7 @@ class Prover:
         # Compute evaluations to be used in constructing the linearization polynomial.
 
         # Compute a_eval = A(zeta)
+        a_eval = self.A.barycentric_eval()
         # Compute b_eval = B(zeta)
         # Compute c_eval = C(zeta)
         # Compute s1_eval = pk.S1(zeta)
