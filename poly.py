@@ -157,6 +157,10 @@ class Polynomial:
         x_powers = [(offset**i * x) for i, x in enumerate(self.values)]
         return Polynomial(x_powers, Basis.MONOMIAL).fft()
 
+    def lagrange_to_coset_lagrange(self, offset):
+        assert self.basis == Basis.LAGRANGE
+        return self.ifft().fft_to_coset_lagrange(offset)
+
     # Convert from offset form into coefficients
     # Note that we can't make a full inverse function of to_coset_extended_lagrange
     # because the output of this might be a deg >= n polynomial, which cannot
@@ -168,7 +172,7 @@ class Polynomial:
         inv_offset = 1 / offset
         return Polynomial(
             [v * inv_offset**i for (i, v) in enumerate(shifted_coeffs)],
-            Basis.LAGRANGE,
+            Basis.MONOMIAL,
         )
 
     # Given a polynomial expressed as a list of evaluations at roots of unity,

@@ -106,9 +106,6 @@ class Prover:
 
         # Sanity check that witness fulfils gate constraints
 
-        print("HERE************118")
-        print(program.wires())
-        print(witness)
 
         A_values = [Scalar(0)]*self.group_order
         B_values = [Scalar(0)]*self.group_order
@@ -264,8 +261,8 @@ class Prover:
         # 3. The permutation accumulator equals 1 at the start point
         #    (Z - 1) * L0 = 0
         #    L0 = Lagrange polynomial, equal at all roots of unity except 1
-        poly_X_ext = Polynomial(roots_of_unity_4x, basis = Basis.LAGRANGE)
-        poly_1_ext = Polynomial([Scalar(1)]*(4*group_order), basis = Basis.LAGRANGE)
+        poly_X_ext = Polynomial(roots_of_unity_4x, basis = Basis.LAGRANGE).lagrange_to_coset_lagrange(self.fft_cofactor)
+        poly_1_ext = Polynomial([Scalar(1)]*(4*group_order), basis = Basis.LAGRANGE).lagrange_to_coset_lagrange(self.fft_cofactor)
         term1 = ((A_ext * B_ext * QM_ext) + (A_ext * QL_ext) + (B_ext * QR_ext) + 
                 (C_ext * QO_ext) + PI_ext + QC_ext)
         term2 = ( (A_ext + poly_X_ext*self.beta + poly_1_ext*self.gamma) *
@@ -276,7 +273,6 @@ class Prover:
                 (C_ext + S3_ext*self.beta + poly_1_ext*self.gamma) * Z_shifted_ext)
         term4 = (Z_ext - poly_1_ext) * L0_ext
 
-        assert(A_ext + poly_1_ext * self.gamma == A_ext + self.gamma)
 
         QUOT_big = (term1 + term2*self.alpha - term3*self.alpha + term4*self.alpha*self.alpha) / Z_H_ext
 
@@ -289,7 +285,13 @@ class Prover:
 
         # Split up T into T1, T2 and T3 (needed because T has degree 3n, so is
         # too big for the trusted setup)
+        T = QUOT_big
+        print(T.values)
+        T1 = Polynomial(T.ifft().values[0:group_order], basis=Basis.MONOMIAL).fft()
+        T2 = Polynomial(T.ifft().values[group_order:2*group_order], basis=Basis.MONOMIAL).fft()
+        T3 = Polynomial(T.ifft().values[2*group_order:3*group_order], basis=Basis.MONOMIAL).fft()
 
+        fft_cofactor = self.fft_cofactor
         # Sanity check that we've computed T1, T2, T3 correctly
         assert (
             T1.barycentric_eval(fft_cofactor)
