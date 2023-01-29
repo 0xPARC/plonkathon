@@ -1,6 +1,6 @@
 from utils import *
 import py_ecc.bn128 as b
-from curve import ec_lincomb, G1Point, G2Point
+from curve import ec_lincomb, G1Point, G2Point, Scalar
 from compiler.program import CommonPreprocessedInput
 from verifier import VerificationKey
 from dataclasses import dataclass
@@ -66,12 +66,41 @@ class Setup(object):
     def commit(self, values: Polynomial) -> G1Point:
         assert values.basis == Basis.LAGRANGE
 
+        # values are just the values the polynomial evaluates to
+
         # Run inverse FFT to convert values from Lagrange basis to monomial basis
+        # TODO: doesn't iFFT convert to coefficients? yes, so monomial basis is coefficients
+        coeffs = values.ifft()
+
         # Optional: Check values size does not exceed maximum power setup can handle
+
+        assert len(coeffs.values) <= len(self.powers_of_x)
+
         # Compute linear combination of setup with values
-        return NotImplemented
+
+        combo = []
+
+        for i in range(len(coeffs.values)):
+            combo.append((self.powers_of_x[i], coeffs.values[i]))
+        
+        return ec_lincomb(combo)
 
     # Generate the verification key for this program with the given setup
     def verification_key(self, pk: CommonPreprocessedInput) -> VerificationKey:
         # Create the appropriate VerificationKey object
-        return NotImplemented
+        vkey = VerificationKey(
+            pk.group_order, 
+            self.commit(pk.QM),
+            self.commit(pk.QL),
+            self.commit(pk.QR),
+            self.commit(pk.QO),
+            self.commit(pk.QC),
+            self.commit(pk.S1),
+            self.commit(pk.S2),
+            self.commit(pk.S3),
+            self.X2, 
+            Scalar.root_of_unity(pk.group_order)
+        )
+        # could also just raise to the power
+
+        return vkey

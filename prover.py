@@ -41,6 +41,13 @@ class Prover:
     setup: Setup
     program: Program
     pk: CommonPreprocessedInput
+    A: Polynomial
+    B: Polynomial 
+    C: Polynomial 
+    PI: Polynomial
+    beta: Scalar 
+    gamma: Scalar
+    # fft_cofactor: tuple[Scalar, Scalar]
 
     def __init__(self, setup: Setup, program: Program):
         self.group_order = program.group_order
@@ -94,15 +101,48 @@ class Prover:
         if None not in witness:
             witness[None] = 0
 
+
         # Compute wire assignments for A, B, C, corresponding:
         # - A_values: witness[program.wires()[i].L]
         # - B_values: witness[program.wires()[i].R]
         # - C_values: witness[program.wires()[i].O]
 
+        a_vals = []
+        b_vals = []
+        c_vals = []
+
+        for gate_wire in program.wires():
+            a_vals.append(Scalar(witness[gate_wire.L]))
+            b_vals.append(Scalar(witness[gate_wire.R]))
+            c_vals.append(Scalar(witness[gate_wire.O]))
+        
+        # pad with 0s 
+
+        while len(a_vals) < len(self.pk.QL.values):
+            a_vals.append(Scalar(0))
+        while len(b_vals) < len(self.pk.QR.values):
+            b_vals.append(Scalar(0))
+        while len(c_vals) < len(self.pk.QO.values):
+            c_vals.append(Scalar(0))
+
         # Construct A, B, C Lagrange interpolation polynomials for
         # A_values, B_values, C_values
 
+        a_poly = Polynomial(a_vals, Basis.LAGRANGE)
+        b_poly = Polynomial(b_vals, Basis.LAGRANGE)
+        c_poly = Polynomial(c_vals, Basis.LAGRANGE)
+
         # Compute a_1, b_1, c_1 commitments to A, B, C polynomials
+        # self.A = self.fft_expand(a_poly) 
+        # self.B = self.fft_expand(b_poly)
+        # self.C = self.fft_expand(c_poly)
+        self.A = a_poly
+        self.B = b_poly
+        self.C = c_poly
+
+        a_1 = setup.commit(a_poly)
+        b_1 = setup.commit(b_poly)
+        c_1 = setup.commit(c_poly)
 
         # Sanity check that witness fulfils gate constraints
         assert (
@@ -122,12 +162,25 @@ class Prover:
         group_order = self.group_order
         setup = self.setup
 
+        roots_of_unity = Scalar.roots_of_unity(group_order)
+
+        F_values = [0 for _ in range(group_order)] 
+        G_values = [0 for _ in range(group_order)] 
+
         # Using A, B, C, values, and pk.S1, pk.S2, pk.S3, compute
         # Z_values for permutation grand product polynomial Z
         #
         # Note the convenience function:
         #       self.rlc(val1, val2) = val_1 + self.beta * val_2 + gamma
 
+        Z_values = [Scalar(0) for _ in range(group_order + 1)] 
+        Z_values[0] = Scalar(1)
+
+        for i in range(group_order):
+            F_values[i] = self.rlc(self.A.values[i], roots_of_unity[i])*self.rlc(self.B.values[i], 2 * roots_of_unity[i]) * self.rlc(self.C.values[i], 3 * roots_of_unity[i])
+            G_values[i] = self.rlc(self.A.values[i], self.pk.S1.values[i])* self.rlc(self.B.values[i], self.pk.S2.values[i])* self.rlc(self.C.values[i], self.pk.S3.values[i])
+            Z_values[i+1] = Z_values[i]*Scalar(F_values[i]/G_values[i])
+    
         # Check that the last term Z_n = 1
         assert Z_values.pop() == 1
 
@@ -146,7 +199,9 @@ class Prover:
             ] == 0
 
         # Construct Z, Lagrange interpolation polynomial for Z_values
+        Z = Polynomial(Z_values, Basis.LAGRANGE)
         # Cpmpute z_1 commitment to Z polynomial
+        z_1 = setup.commit(Z)
 
         # Return z_1
         return Message2(z_1)
