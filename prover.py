@@ -236,11 +236,13 @@ class Prover:
         cyclo_coeffs[group_order] = Scalar(1)
         Z_H_ext = Polynomial(cyclo_coeffs, Basis.MONOMIAL).fft_to_coset_lagrange(self.fft_cofactor)
 
+    
+
         # Compute L0, the Lagrange basis polynomial that evaluates to 1 at x = 1 = ω^0
         # and 0 at other roots of unity
         L_0_coeffs = [Scalar(0)]*(group_order)
         L_0_coeffs[0] = Scalar(1)
-        L_0 = Polynomial(L_0_coeffs, Basis.MONOMIAL).fft()     # Is this needed at all?
+        L_0 = Polynomial(L_0_coeffs, Basis.LAGRANGE)     # Is this needed at all?  Nope, it's the same as the thing below
 
         # Expand L0 into the coset extended Lagrange basis
         L0_ext = self.fft_expand(
@@ -273,6 +275,8 @@ class Prover:
                 (B_ext + S2_ext*self.beta + poly_1_ext*self.gamma) *
                 (C_ext + S3_ext*self.beta + poly_1_ext*self.gamma) * Z_shifted_ext)
         term4 = (Z_ext - poly_1_ext) * L0_ext
+
+        assert(A_ext + poly_1_ext * self.gamma == A_ext + self.gamma)
 
         QUOT_big = (term1 + term2*self.alpha - term3*self.alpha + term4*self.alpha*self.alpha) / Z_H_ext
 
