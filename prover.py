@@ -116,17 +116,20 @@ class Prover:
 
         n_wires = len(program.wires())
         self.A = Polynomial(
-            list(map(Scalar, [witness[program.wires()[i].L] for i in range(n_wires)]))
+            list(map(Scalar, [witness[program.wires()[i].L]
+                 for i in range(n_wires)]))
             + [Scalar(0)] * (group_order - n_wires),
             Basis.LAGRANGE,
         )
         self.B = Polynomial(
-            list(map(Scalar, [witness[program.wires()[i].R] for i in range(n_wires)]))
+            list(map(Scalar, [witness[program.wires()[i].R]
+                 for i in range(n_wires)]))
             + [Scalar(0)] * (group_order - n_wires),
             Basis.LAGRANGE,
         )
         self.C = Polynomial(
-            list(map(Scalar, [witness[program.wires()[i].O] for i in range(n_wires)]))
+            list(map(Scalar, [witness[program.wires()[i].O]
+                 for i in range(n_wires)]))
             + [Scalar(0)] * (group_order - n_wires),
             Basis.LAGRANGE,
         )
@@ -213,7 +216,8 @@ class Prover:
         # List of roots of unity at 4x fineness, i.e. the powers of µ
         # where µ^(4n) = 1
         roots_of_unity4 = self.fft_expand(
-            Polynomial(Scalar.roots_of_unity(group_order), basis=Basis.LAGRANGE)
+            Polynomial(Scalar.roots_of_unity(
+                group_order), basis=Basis.LAGRANGE)
         )
         print("roots of unity 4", roots_of_unity4.ifft().values)
 
@@ -259,7 +263,8 @@ class Prover:
 
         # Compute Z_H = X^N - 1, also in evaluation form in the coset
         nth = self.fft_expand(
-            Polynomial(Scalar.roots_of_unity(group_order), basis=Basis.LAGRANGE)
+            Polynomial(Scalar.roots_of_unity(
+                group_order), basis=Basis.LAGRANGE)
         )
         z_h = nth
         for _ in range(group_order - 1):
@@ -276,7 +281,8 @@ class Prover:
         L0_big = (
             self.fft_expand(
                 Polynomial(
-                    [Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE
+                    [Scalar(1)] + [Scalar(0)] *
+                    (group_order - 1), Basis.LAGRANGE
                 )
             )
             * Scalar(self.alpha)
@@ -324,6 +330,7 @@ class Prover:
             + permutationAccum / z_h
             + ((Z_coset - Scalar(1)) * L0_big / z_h)
         )
+        self.QUOT_big = QUOT_big
         # Sanity check: QUOT has degree < 3n
         assert (
             self.expanded_evals_to_coeffs(QUOT_big).values[-group_order:]
@@ -333,16 +340,14 @@ class Prover:
         QUOTE_expanded = self.expanded_evals_to_coeffs(QUOT_big).values
         print("Generated the quotient polynomial")
 
-        self.QUOTE_expanded = QUOTE_expanded
+        # self.QUOTE_expanded = QUOTE_expanded
 
         # Split up T into T1, T2 and T3 (needed because T has degree 3n, so is
         # too big for the trusted setup)
         T1 = Polynomial(QUOTE_expanded[:group_order], Basis.MONOMIAL).fft()
-        T2 = Polynomial(
-            QUOTE_expanded[group_order : 2 * group_order], Basis.MONOMIAL
-        ).fft()
+        T2 = Polynomial(QUOTE_expanded[group_order : group_order * 2], Basis.MONOMIAL).fft()
         T3 = Polynomial(
-            QUOTE_expanded[2 * group_order : 3 * group_order], Basis.MONOMIAL
+            QUOTE_expanded[group_order * 2 : group_order * 3], Basis.MONOMIAL
         ).fft()
 
         self.T1 = T1
@@ -352,7 +357,8 @@ class Prover:
         # Sanity check that we've computed T1, T2, T3 correctly
         assert (
             T1.barycentric_eval(self.fft_cofactor)
-            + T2.barycentric_eval(self.fft_cofactor) * self.fft_cofactor**group_order
+            + T2.barycentric_eval(self.fft_cofactor) *
+            self.fft_cofactor**group_order
             + T3.barycentric_eval(self.fft_cofactor)
             * self.fft_cofactor ** (group_order * 2)
         ) == QUOT_big.values[0]
@@ -389,83 +395,51 @@ class Prover:
         self.a_bar = a_eval
         self.b_bar = b_eval
         self.c_bar = c_eval
-        self.s1_eval = a_eval
+        self.s1_eval = s1_eval
         self.s2_eval = s2_eval
         self.z_shifted_eval = z_shifted_eval
         # Return a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval
         return Message4(a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval)
 
     def round_5(self) -> Message5:
-        # Evaluate the Lagrange basis polynomial L0 at zeta
-        l0_zeta = self.L0.barycentric_eval(self.zeta)
+        print("********* STARTING ROUND 5")
 
-        # Evaluate the vanishing polynomial Z_H(X) = X^n - 1 at zeta
-        vanishing_zeta = self.z_h.barycentric_eval(self.zeta)
-
-        # Move T1, T2, T3 into the coset extended Lagrange basis
-        t1_coset = self.fft_expand(self.T1)
-        t2_coset = self.fft_expand(self.T2)
-        t3_coset = self.fft_expand(self.T3)
-
-        # Move pk.QL,into the coset extended Lagrange basis
-        # saved in self from round 3
-
-        # Move Z into the coset extended Lagrange basis
-        # saved in z_coset from round 3
-
-        # Move pk.S3 into the coset extended Lagrange basis
-        # saved in s3_coset from round 3
-
-        # Compute the "linearization polynomial" R. This is a clever way to avoid
-        # needing to provide evaluations of _all_ the polynomials that we are
-        # checking an equation betweeen: instead, we can "skip" the first
-        # multiplicand in each term. The idea is that we construct a
-        # polynomial which is constructed to equal 0 at Z only if the equations
-        # that we are checking are correct, and which the verifier can reconstruct
-        # the KZG commitment to, and we provide proofs to verify that it actually
-        # equals 0 at Z
-        top = (
-            self.QM_coset * self.a_bar * self.b_bar
-            + self.QL_coset * self.a_bar
-            + self.QR_coset * self.b_bar
-            + self.QO_coset * self.c_bar
-            + self.PI.barycentric_eval(self.zeta)  # add group element to poly?
-            + self.QC_coset
+        zeta = self.zeta
+        L0 = Polynomial(
+            [Scalar(1)] + [Scalar(0)] *
+            (self.group_order - 1), Basis.LAGRANGE
         )
 
-        copy = (
-            self.Z_coset
-            * self.alpha
-            * (
-                self.rlc(self.a_bar, self.zeta)
-                * self.rlc(self.b_bar, self.zeta * Scalar(2))
-                * self.rlc(self.c_bar, self.zeta * Scalar(3))
+        gates_poly = self.pk.QM * self.a_bar * self.b_bar + \
+            self.pk.QL * self.a_bar + \
+            self.pk.QR * self.b_bar + \
+            self.pk.QO * self.c_bar + \
+            self.PI.barycentric_eval(zeta) + \
+            self.pk.QC
+        copy_poly = (
+            (
+                self.Z_values_poly *
+                self.rlc(self.a_bar, zeta) *
+                self.rlc(self.b_bar, zeta * Scalar(2)) *
+                self.rlc(self.c_bar, zeta * Scalar(3))
+            ) -
+            (
+                (self.pk.S3 * self.beta + self.c_bar + self.gamma) *
+                self.z_shifted_eval *
+                self.rlc(self.a_bar, self.s1_eval) *
+                self.rlc(self.b_bar, self.s2_eval)
             )
-        )
+        ) * self.alpha + (
+            (self.Z_values_poly - Scalar(1)) *
+            L0.barycentric_eval(zeta)
+        ) * self.alpha**2
+        quo_poly = (
+            self.T1 +
+            self.T2 * zeta**self.group_order +
+            self.T3 * zeta**(2*self.group_order)
+        ) * (zeta**self.group_order - Scalar(1))
 
-        permuted = (
-            self.rlc(self.S3_coset, self.c_bar)
-            * self.rlc(self.a_bar, self.s1_eval)
-            * self.rlc(self.b_bar, self.s2_eval)
-        ) * self.z_shifted_eval
-
-        final_copy = (self.Z_coset - Scalar(1)) * self.alpha * self.alpha * l0_zeta
-
-        n = self.zeta**self.group_order
-        n2 = n**2
-        quotient = (
-            t1_coset + t2_coset * n + t3_coset * n2
-        ) * self.z_h.barycentric_eval(self.zeta)
-
-        R = top + copy - permuted + final_copy - quotient
-
-        # In order for the verifier to be able to reconstruct the commitment to R,
-        # it has to be "linear" in the proof items, hence why we can only use each
-        # proof item once; any further multiplicands in each term need to be
-        # replaced with their evaluations at Z, which do still need to be provided
-
-        # Commit to R
-        self.R_comm = self.setup.commit(R)
+        R = gates_poly + copy_poly - quo_poly
 
         # Sanity-check R
         assert R.barycentric_eval(self.zeta) == 0
