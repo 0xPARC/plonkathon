@@ -203,3 +203,11 @@ class Polynomial:
                 ]
             )
         )
+
+    # Given a polynomial expressed as a list of evaluations at roots of unity,
+    # evaluate it at x directly, without using an FFT to covert to coeffs first
+    def eval(self, x: Scalar):
+        if self.basis == Basis.MONOMIAL:
+            return self.fft().barycentric_eval(x)
+        else:
+            return self.barycentric_eval(x)
