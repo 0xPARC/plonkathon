@@ -401,10 +401,6 @@ class Prover:
         vanishing_zeta = self.z_h.barycentric_eval(self.zeta)
 
         # Move T1, T2, T3 into the coset extended Lagrange basis
-        t1_coset = self.fft_expand(self.T1)
-        t2_coset = self.fft_expand(self.T2)
-        t3_coset = self.fft_expand(self.T3)
-
         # Move pk.QL,into the coset extended Lagrange basis
         # saved in self from round 3
 
@@ -423,35 +419,36 @@ class Prover:
         # the KZG commitment to, and we provide proofs to verify that it actually
         # equals 0 at Z
         top = (
-            self.QM_coset * self.a_bar * self.b_bar
-            + self.QL_coset * self.a_bar
-            + self.QR_coset * self.b_bar
-            + self.QO_coset * self.c_bar
+            self.pk.QM * self.a_bar * self.b_bar
+            + self.pk.QL * self.a_bar
+            + self.pk.QR * self.b_bar
+            + self.pk.QO * self.c_bar
             + self.PI.barycentric_eval(self.zeta)
-            + self.QC_coset
+            + self.pk.QC
         )
 
-        copy = self.Z_coset * (
+        copy = self.Z_values_poly * (
             self.rlc(self.a_bar, self.zeta)
             * self.rlc(self.b_bar, self.zeta * Scalar(2))
             * self.rlc(self.c_bar, self.zeta * Scalar(3))
         )
 
         permuted = (
-            (self.S3_coset * self.beta + self.c_bar + self.gamma)
+            (self.pk.S3 * self.beta + self.c_bar + self.gamma)
             * self.rlc(self.a_bar, self.s1_eval)
             * self.rlc(self.b_bar, self.s2_eval)
         ) * self.z_shifted_eval
 
-        final_copy = (self.Z_coset - Scalar(1)) * self.alpha * self.alpha * l0_zeta
+        final_copy = (
+            (self.Z_values_poly - Scalar(1)) * l0_zeta * self.alpha * self.alpha
+        )
 
         n = self.zeta**self.group_order
         n2 = n**2
-        quotient = (
-            t1_coset + t2_coset * n + t3_coset * n2
-        ) * self.z_h.barycentric_eval(self.zeta)
+        quotient = (self.T1 + self.T2 * n + self.T3 * n2) * vanishing_zeta
 
-        R = top + copy - permuted + final_copy - quotient
+        R = top + (copy - permuted) * self.alpha + final_copy - quotient
+        print(R.barycentric_eval(self.zeta))
 
         # In order for the verifier to be able to reconstruct the commitment to R,
         # it has to be "linear" in the proof items, hence why we can only use each
