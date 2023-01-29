@@ -10,6 +10,7 @@ from poly import Polynomial, Basis
 class VerificationKey:
     """Verification key"""
 
+    # we set this to some power of 2 (so that we can FFT over it), that is at least the number of constraints we have (so we can Lagrange interpolate them)
     group_order: int
     # [q_M(x)]₁ (commitment to multiplication selector polynomial)
     Qm: G1Point
@@ -29,7 +30,7 @@ class VerificationKey:
     S3: G1Point
     # [x]₂ = xH, where H is a generator of G_2
     X_2: G2Point
-    # nth root of unity, where n is the program's group order.
+    # nth root of unity (i.e. ω^1), where n is the program's group order.
     w: Scalar
 
     # More optimized version that tries hard to minimize pairings and
