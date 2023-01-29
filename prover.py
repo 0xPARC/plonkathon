@@ -333,8 +333,6 @@ class Prover:
         QUOTE_expanded = self.expanded_evals_to_coeffs(QUOT_big).values
         print("Generated the quotient polynomial")
 
-        self.QUOTE_expanded = QUOTE_expanded
-
         # Split up T into T1, T2 and T3 (needed because T has degree 3n, so is
         # too big for the trusted setup)
         T1 = Polynomial(QUOTE_expanded[:group_order], Basis.MONOMIAL).fft()
@@ -429,22 +427,18 @@ class Prover:
             + self.QL_coset * self.a_bar
             + self.QR_coset * self.b_bar
             + self.QO_coset * self.c_bar
-            + self.PI.barycentric_eval(self.zeta)  # add group element to poly?
+            + self.PI.barycentric_eval(self.zeta)
             + self.QC_coset
         )
 
-        copy = (
-            self.Z_coset
-            * self.alpha
-            * (
-                self.rlc(self.a_bar, self.zeta)
-                * self.rlc(self.b_bar, self.zeta * Scalar(2))
-                * self.rlc(self.c_bar, self.zeta * Scalar(3))
-            )
+        copy = self.Z_coset * (
+            self.rlc(self.a_bar, self.zeta)
+            * self.rlc(self.b_bar, self.zeta * Scalar(2))
+            * self.rlc(self.c_bar, self.zeta * Scalar(3))
         )
 
         permuted = (
-            self.rlc(self.S3_coset, self.c_bar)
+            (self.S3_coset * self.beta + self.c_bar + self.gamma)
             * self.rlc(self.a_bar, self.s1_eval)
             * self.rlc(self.b_bar, self.s2_eval)
         ) * self.z_shifted_eval
@@ -465,7 +459,7 @@ class Prover:
         # replaced with their evaluations at Z, which do still need to be provided
 
         # Commit to R
-        self.R_comm = self.setup.commit(R)
+        # self.R_comm = self.setup.commit(R)
 
         # Sanity-check R
         assert R.barycentric_eval(self.zeta) == 0
