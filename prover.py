@@ -287,7 +287,7 @@ class Prover:
         # Check that degree of W_z is not greater than n
         assert W_z_coeffs[group_order:] == [0] * (group_order * 3)
 
-        # Compute W_z_1 commitment to W_z
+        # Compute W_z_1, commitment to W_z
 
         # Generate proof that the provided evaluation of Z(z*w) is correct. This
         # awkwardly different term is needed because the permutation accumulator
@@ -295,10 +295,10 @@ class Prover:
         # coordinates, and not just within one coordinate.
         # In other words: Compute W_zw = (Z - z_shifted_eval) / (X - zeta * ω)
 
-        # Check that degree of W_z is not greater than n
+        # Check that degree of W_zw is not greater than n
         assert W_zw_coeffs[group_order:] == [0] * (group_order * 3)
 
-        # Compute W_z_1 commitment to W_z
+        # Compute W_zw_1, commitment to W_zw
 
         print("Generated final quotient witness polynomials")
 
