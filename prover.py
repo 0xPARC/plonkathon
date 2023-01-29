@@ -116,19 +116,19 @@ class Prover:
 
         n_wires = len(program.wires())
         self.A = Polynomial(
-            list(map(Scalar, [witness[program.wires()[i].L]
-                 for i in range(n_wires)])) + [Scalar(0)] * (group_order - n_wires),
-            Basis.LAGRANGE
+            list(map(Scalar, [witness[program.wires()[i].L] for i in range(n_wires)]))
+            + [Scalar(0)] * (group_order - n_wires),
+            Basis.LAGRANGE,
         )
         self.B = Polynomial(
-            list(map(Scalar, [witness[program.wires()[i].R]
-                 for i in range(n_wires)])) + [Scalar(0)] * (group_order - n_wires),
-            Basis.LAGRANGE
+            list(map(Scalar, [witness[program.wires()[i].R] for i in range(n_wires)]))
+            + [Scalar(0)] * (group_order - n_wires),
+            Basis.LAGRANGE,
         )
         self.C = Polynomial(
-            list(map(Scalar, [witness[program.wires()[i].O]
-                 for i in range(n_wires)])) + [Scalar(0)] * (group_order - n_wires),
-            Basis.LAGRANGE
+            list(map(Scalar, [witness[program.wires()[i].O] for i in range(n_wires)]))
+            + [Scalar(0)] * (group_order - n_wires),
+            Basis.LAGRANGE,
         )
 
         a_1 = setup.commit(self.A)
@@ -166,10 +166,16 @@ class Prover:
 
         Z_values = [Scalar(1)]
         for i in range(1, group_order + 1):
-            numer = self.rlc(self.A.values[i - 1], roots_of_unity[i - 1]) * self.rlc(
-                self.B.values[i - 1], 2 * roots_of_unity[i - 1]) * self.rlc(self.C.values[i - 1], 3 * roots_of_unity[i - 1])
-            deno = self.rlc(self.A.values[i - 1], self.pk.S1.values[i - 1]) * self.rlc(
-                self.B.values[i - 1], self.pk.S2.values[i - 1]) * self.rlc(self.C.values[i - 1], self.pk.S3.values[i - 1])
+            numer = (
+                self.rlc(self.A.values[i - 1], roots_of_unity[i - 1])
+                * self.rlc(self.B.values[i - 1], 2 * roots_of_unity[i - 1])
+                * self.rlc(self.C.values[i - 1], 3 * roots_of_unity[i - 1])
+            )
+            deno = (
+                self.rlc(self.A.values[i - 1], self.pk.S1.values[i - 1])
+                * self.rlc(self.B.values[i - 1], self.pk.S2.values[i - 1])
+                * self.rlc(self.C.values[i - 1], self.pk.S3.values[i - 1])
+            )
             Z_values.append(Scalar(Z_values[-1] * numer / deno))
 
         # Check that the last term Z_n = 1
@@ -206,7 +212,10 @@ class Prover:
 
         # List of roots of unity at 4x fineness, i.e. the powers of µ
         # where µ^(4n) = 1
-        roots_of_unity4 = Polynomial(Scalar.roots_of_unity(group_order * 4), basis=Basis.LAGRANGE)
+        roots_of_unity4 = self.fft_expand(
+            Polynomial(Scalar.roots_of_unity(group_order), basis=Basis.LAGRANGE)
+        )
+        print("roots of unity 4", roots_of_unity4.ifft().values)
 
         # Using self.fft_expand, move A, B, C into coset extended Lagrange basis
         A_coset = self.fft_expand(self.A)
@@ -227,10 +236,10 @@ class Prover:
         # Expand permutation grand product polynomial Z into coset extended
         # Lagrange basis
         Z_coset = self.fft_expand(self.Z_values_poly)
-        
+
         # Expand shifted Z(ω) into coset extended Lagrange basis
         # possibly incorrect
-        Z_w = Z_coset.shift(4)
+        Z_w = self.fft_expand(self.Z_values_poly.shift(1))
 
         # Expand permutation polynomials pk.S1, pk.S2, pk.S3 into coset
         # extended Lagrange basis
@@ -239,19 +248,28 @@ class Prover:
         S3_coset = self.fft_expand(self.pk.S3)
 
         # Compute Z_H = X^N - 1, also in evaluation form in the coset
-        nth = self.fft_expand(Polynomial(Scalar.roots_of_unity(group_order), basis=Basis.LAGRANGE))
+        nth = self.fft_expand(
+            Polynomial(Scalar.roots_of_unity(group_order), basis=Basis.LAGRANGE)
+        )
         z_h = nth
         for _ in range(group_order - 1):
-          z_h *= nth
+            z_h *= nth
+        z_h -= Scalar(1)
+        print("val: ", z_h.ifft().values)
 
         # Compute L0, the Lagrange basis polynomial that evaluates to 1 at x = 1 = ω^0
         # and 0 at other roots of unity
 
         # Expand L0 into the coset extended Lagrange basis
-        L0_big = self.fft_expand(
-            Polynomial([Scalar(1)] + [Scalar(0)] *
-                       (group_order - 1), Basis.LAGRANGE)
-        ) * Scalar(self.alpha) * Scalar(self.alpha)
+        L0_big = (
+            self.fft_expand(
+                Polynomial(
+                    [Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE
+                )
+            )
+            * Scalar(self.alpha)
+            * Scalar(self.alpha)
+        )
 
         # Compute the quotient polynomial (called T(x) in the paper)
         # It is only possible to construct this polynomial if the following
@@ -269,29 +287,55 @@ class Prover:
         #    (Z - 1) * L0 = 0
         #    L0 = Lagrange polynomial, equal at all roots of unity except 1
 
-        correctGates = (A_coset * QL_coset + B_coset * QR_coset + A_coset * B_coset * QM_coset + C_coset * QO_coset + PI_coset + QC_coset) / z_h
-        permutationAccum = Z_w * Scalar(self.alpha) - Z_coset * Scalar(self.alpha) * (self.rlc(A_coset, roots_of_unity4) * self.rlc(B_coset, roots_of_unity4 * Scalar(2)) * self.rlc(C_coset, roots_of_unity4 * Scalar(3)) / self.rlc(A_coset, S1_coset) / self.rlc(B_coset, S2_coset) / self.rlc(C_coset, S3_coset))
-        QUOT_big = correctGates + permutationAccum / z_h + ((Z_coset - Scalar(1)) * L0_big / z_h)
-        print(self.expanded_evals_to_coeffs(QUOT_big).values[-group_order:])
+        correctGates = (
+            A_coset * QL_coset
+            + B_coset * QR_coset
+            + A_coset * B_coset * QM_coset
+            + C_coset * QO_coset
+            + PI_coset
+            + QC_coset
+        ) / z_h
+
+        permutationAccum = Z_coset * Scalar(self.alpha) * (
+            self.rlc(A_coset, roots_of_unity4)
+            * self.rlc(B_coset, roots_of_unity4 * Scalar(2))
+            * self.rlc(C_coset, roots_of_unity4 * Scalar(3))
+        ) - Z_w * Scalar(self.alpha) * self.rlc(A_coset, S1_coset) * self.rlc(
+            B_coset, S2_coset
+        ) * self.rlc(
+            C_coset, S3_coset
+        )
+
+        QUOT_big = (
+            correctGates
+            + permutationAccum / z_h
+            + ((Z_coset - Scalar(1)) * L0_big / z_h)
+        )
         # Sanity check: QUOT has degree < 3n
         assert (
             self.expanded_evals_to_coeffs(QUOT_big).values[-group_order:]
             == [0] * group_order
         )
+
+        QUOTE_expanded = self.expanded_evals_to_coeffs(QUOT_big).values
         print("Generated the quotient polynomial")
 
         # Split up T into T1, T2 and T3 (needed because T has degree 3n, so is
         # too big for the trusted setup)
-        T1 = QUOT_big[:group_order]
-        T2 = QUOT_big[group_order:2 * group_order]
-        T3 = QUOT_big[2 * group_order:]
+        T1 = Polynomial(QUOTE_expanded[:group_order], Basis.MONOMIAL).fft()
+        T2 = Polynomial(
+            QUOTE_expanded[group_order : 2 * group_order], Basis.MONOMIAL
+        ).fft()
+        T3 = Polynomial(
+            QUOTE_expanded[2 * group_order : 3 * group_order], Basis.MONOMIAL
+        ).fft()
 
         # Sanity check that we've computed T1, T2, T3 correctly
         assert (
-            T1.barycentric_eval(fft_cofactor)
-            + T2.barycentric_eval(fft_cofactor) * fft_cofactor**group_order
-            + T3.barycentric_eval(fft_cofactor) *
-            fft_cofactor ** (group_order * 2)
+            T1.barycentric_eval(self.fft_cofactor)
+            + T2.barycentric_eval(self.fft_cofactor) * self.fft_cofactor**group_order
+            + T3.barycentric_eval(self.fft_cofactor)
+            * self.fft_cofactor ** (group_order * 2)
         ) == QUOT_big.values[0]
 
         print("Generated T1, T2, T3 polynomials")
