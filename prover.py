@@ -42,12 +42,14 @@ class Prover:
     program: Program
     pk: CommonPreprocessedInput
     A: Polynomial
-    B: Polynomial 
-    C: Polynomial 
+    B: Polynomial
+    C: Polynomial
+    Z: Polynomial
     PI: Polynomial
-    beta: Scalar 
+    beta: Scalar
     gamma: Scalar
-    # fft_cofactor: tuple[Scalar, Scalar]
+    fft_cofactor: Scalar
+    alpha: Scalar
 
     def __init__(self, setup: Setup, program: Program):
         self.group_order = program.group_order
@@ -101,7 +103,6 @@ class Prover:
         if None not in witness:
             witness[None] = 0
 
-
         # Compute wire assignments for A, B, C, corresponding:
         # - A_values: witness[program.wires()[i].L]
         # - B_values: witness[program.wires()[i].R]
@@ -115,8 +116,8 @@ class Prover:
             a_vals.append(Scalar(witness[gate_wire.L]))
             b_vals.append(Scalar(witness[gate_wire.R]))
             c_vals.append(Scalar(witness[gate_wire.O]))
-        
-        # pad with 0s 
+
+        # pad with 0s
 
         while len(a_vals) < len(self.pk.QL.values):
             a_vals.append(Scalar(0))
@@ -133,7 +134,7 @@ class Prover:
         c_poly = Polynomial(c_vals, Basis.LAGRANGE)
 
         # Compute a_1, b_1, c_1 commitments to A, B, C polynomials
-        # self.A = self.fft_expand(a_poly) 
+        # self.A = self.fft_expand(a_poly)
         # self.B = self.fft_expand(b_poly)
         # self.C = self.fft_expand(c_poly)
         self.A = a_poly
@@ -164,8 +165,8 @@ class Prover:
 
         roots_of_unity = Scalar.roots_of_unity(group_order)
 
-        F_values = [0 for _ in range(group_order)] 
-        G_values = [0 for _ in range(group_order)] 
+        F_values = [0 for _ in range(group_order)]
+        G_values = [0 for _ in range(group_order)]
 
         # Using A, B, C, values, and pk.S1, pk.S2, pk.S3, compute
         # Z_values for permutation grand product polynomial Z
@@ -173,14 +174,16 @@ class Prover:
         # Note the convenience function:
         #       self.rlc(val1, val2) = val_1 + self.beta * val_2 + gamma
 
-        Z_values = [Scalar(0) for _ in range(group_order + 1)] 
+        Z_values = [Scalar(0) for _ in range(group_order + 1)]
         Z_values[0] = Scalar(1)
 
         for i in range(group_order):
-            F_values[i] = self.rlc(self.A.values[i], roots_of_unity[i])*self.rlc(self.B.values[i], 2 * roots_of_unity[i]) * self.rlc(self.C.values[i], 3 * roots_of_unity[i])
-            G_values[i] = self.rlc(self.A.values[i], self.pk.S1.values[i])* self.rlc(self.B.values[i], self.pk.S2.values[i])* self.rlc(self.C.values[i], self.pk.S3.values[i])
+            F_values[i] = self.rlc(self.A.values[i], roots_of_unity[i])*self.rlc(
+                self.B.values[i], 2 * roots_of_unity[i]) * self.rlc(self.C.values[i], 3 * roots_of_unity[i])
+            G_values[i] = self.rlc(self.A.values[i], self.pk.S1.values[i]) * self.rlc(
+                self.B.values[i], self.pk.S2.values[i]) * self.rlc(self.C.values[i], self.pk.S3.values[i])
             Z_values[i+1] = Z_values[i]*Scalar(F_values[i]/G_values[i])
-    
+
         # Check that the last term Z_n = 1
         assert Z_values.pop() == 1
 
@@ -200,6 +203,7 @@ class Prover:
 
         # Construct Z, Lagrange interpolation polynomial for Z_values
         Z = Polynomial(Z_values, Basis.LAGRANGE)
+        self.Z = Z
         # Cpmpute z_1 commitment to Z polynomial
         z_1 = setup.commit(Z)
 
@@ -215,32 +219,94 @@ class Prover:
         # List of roots of unity at 4x fineness, i.e. the powers of µ
         # where µ^(4n) = 1
 
+        # TODO: have to use fft_expand instead of generating 32 roots of unity to prevent div by 0
+        roots_of_unity = Scalar.roots_of_unity(group_order)
+        p_omega = Polynomial(roots_of_unity, Basis.LAGRANGE)
+        expanded_rou = self.fft_expand(p_omega)
+
+        print("expanded_rou")
+        print(expanded_rou)
+
         # Using self.fft_expand, move A, B, C into coset extended Lagrange basis
 
+        expanded_A = self.fft_expand(self.A)
+        expanded_B = self.fft_expand(self.B)
+        expanded_C = self.fft_expand(self.C)
+
         # Expand public inputs polynomial PI into coset extended Lagrange
+
+        expanded_PI = self.fft_expand(self.PI)
 
         # Expand selector polynomials pk.QL, pk.QR, pk.QM, pk.QO, pk.QC
         # into the coset extended Lagrange basis
 
+        expanded_QL = self.fft_expand(self.pk.QL)
+        expanded_QR = self.fft_expand(self.pk.QR)
+        expanded_QM = self.fft_expand(self.pk.QM)
+        expanded_QC = self.fft_expand(self.pk.QC)
+        expanded_QO = self.fft_expand(self.pk.QO)
+
         # Expand permutation grand product polynomial Z into coset extended
         # Lagrange basis
 
+        expanded_Z = self.fft_expand(self.Z)
+
         # Expand shifted Z(ω) into coset extended Lagrange basis
+        results_shifted = []
+        results = []
+        for r in range(len(expanded_rou.values)):
+            results.append(expanded_Z.barycentric_eval(expanded_rou.values[r]))
+            results_shifted.append(expanded_Z.barycentric_eval(
+                expanded_rou.values[(r + 1) % group_order]))
+        # create a polynomial
+
+        shifted_Z = Polynomial(results_shifted, Basis.LAGRANGE)
 
         # Expand permutation polynomials pk.S1, pk.S2, pk.S3 into coset
         # extended Lagrange basis
 
+        expanded_S1 = self.fft_expand(self.pk.S1)
+        expanded_S2 = self.fft_expand(self.pk.S2)
+        expanded_S3 = self.fft_expand(self.pk.S3)
+
         # Compute Z_H = X^N - 1, also in evaluation form in the coset
+
+        Z_H = Polynomial([Scalar(0)
+                         for _ in range(group_order)], Basis.LAGRANGE)
 
         # Compute L0, the Lagrange basis polynomial that evaluates to 1 at x = 1 = ω^0
         # and 0 at other roots of unity
 
+        L0 = Polynomial([Scalar(1)] + [Scalar(0)
+                        for _ in range(group_order - 1)], Basis.LAGRANGE)
+
         # Expand L0 into the coset extended Lagrange basis
         L0_big = self.fft_expand(
-            Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE)
+            Polynomial([Scalar(1)] + [Scalar(0)] *
+                       (group_order - 1), Basis.LAGRANGE)
         )
 
+        X = Polynomial(roots_of_unity, Basis.LAGRANGE)
+
         # Compute the quotient polynomial (called T(x) in the paper)
+        # TODO: might have to do modular inverse?
+        QUOT_big = (
+            (expanded_A*expanded_B*expanded_QM + expanded_A*expanded_QL + expanded_B*expanded_QR + expanded_C*expanded_QO + expanded_PI + expanded_QC) 
+            / Z_H
+            ) + (
+            (expanded_A + self.beta*X + self.gamma)
+            * (expanded_B + self.beta*Scalar(2) + self.gamma)
+            * (expanded_C + self.beta*Scalar(3)*X + self.gamma)
+            * expanded_Z
+            ) * self.alpha - Z_H - (
+            (expanded_A + self.beta*expanded_S1 + self.gamma)
+            *(expanded_B + self.beta*expanded_S1 + self.gamma)
+            *(expanded_C + self.beta*expanded_S3 + self.gamma) 
+            * shifted_Z
+            ) * self.alpha * Z_H + (expanded_Z - 1) * L0_big * (self.alpha * self.alpha)/Z_H
+
+
+
         # It is only possible to construct this polynomial if the following
         # equations are true at all roots of unity {1, w ... w^(n-1)}:
         # 1. All gates are correct:
@@ -266,11 +332,14 @@ class Prover:
         # Split up T into T1, T2 and T3 (needed because T has degree 3n, so is
         # too big for the trusted setup)
 
+        T1 = 
+
         # Sanity check that we've computed T1, T2, T3 correctly
         assert (
             T1.barycentric_eval(fft_cofactor)
             + T2.barycentric_eval(fft_cofactor) * fft_cofactor**group_order
-            + T3.barycentric_eval(fft_cofactor) * fft_cofactor ** (group_order * 2)
+            + T3.barycentric_eval(fft_cofactor) * \
+                                  fft_cofactor ** (group_order * 2)
         ) == QUOT_big.values[0]
 
         print("Generated T1, T2, T3 polynomials")
