@@ -283,7 +283,7 @@ class Prover:
         )
         print("Generated the quotient polynomial")
 
-        # Split up T into T1, T2 and T3 (needed because T has degree 3n, so is
+        # Split up T into T1, T2 and T3 (needed because T has degree 3n - 4, so is
         # too big for the trusted setup)
         T = QUOT_big
         print(T.values)
@@ -321,7 +321,7 @@ class Prover:
 
     def round_5(self) -> Message5:
         # Evaluate the Lagrange basis polynomial L0 at zeta
-        # Evaluate the vanishing polynomial Z_H(X) = X^n at zeta
+        # Evaluate the vanishing polynomial Z_H(X) = X^n - 1 at zeta
 
         # Move T1, T2, T3 into the coset extended Lagrange basis
         # Move pk.QL, pk.QR, pk.QM, pk.QO, pk.QC into the coset extended Lagrange basis
