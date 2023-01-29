@@ -68,7 +68,7 @@ class Prover:
 
         # Round 2
         msg_2 = self.round_2()
-        self.fft_cofactor = transcript.round_2(msg_2)
+        self.alpha, self.fft_cofactor = transcript.round_2(msg_2)
 
         # Round 3
         msg_3 = self.round_3()
@@ -188,9 +188,11 @@ class Prover:
     def round_3(self) -> Message3:
         group_order = self.group_order
         setup = self.setup
+        k1 = 2
+        k2 = 3
 
         # Compute the quotient polynomial
-        alpha = self.zeta
+        alpha = self.alpha
 
         # List of roots of unity at 4x fineness, i.e. the powers of µ
         # where µ^(4n) = 1
@@ -227,17 +229,18 @@ class Prover:
         S3_expanded = self.fft_expand(self.pk.S3)
 
         # Compute Z_H = X^N - 1, also in evaluation form in the coset
-        Zh = self.fft_expand(Polynomial([Scalar(-1)] + [Scalar(0)] * (group_order - 2) + [Scalar(1)], Basis.LAGRANGE))
-        Zh_expanded = self.fft_expand(Zh)
+        Zh_expanded = Polynomial([Scalar(-1)] + [Scalar(0)] * (group_order - 1) + [Scalar(1)] + [Scalar(0)] * (group_order * 3 - 1), Basis.MONOMIAL).fft()
 
         # Compute L0, the Lagrange basis polynomial that evaluates to 1 at x = 1 = ω^0
         # and 0 at other roots of unity
-        L0 = Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE)
+        L_neg1 = Polynomial([Scalar(-1)] + [Scalar(0)] * (group_order - 1), Basis.MONOMIAL) # -1
+        L0 = Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE) # 1
+        L1 = Polynomial([Scalar(0)] + [Scalar(1)] + [Scalar(0)] * (group_order - 2), Basis.MONOMIAL) # x
 
         # Expand L0 into the coset extended Lagrange basis
-        L0_big = self.fft_expand(
-            Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE)
-        )
+        L_neg1_big = self.fft_expand(L_neg1)
+        L0_big = self.fft_expand(L0)
+        L1_big = self.fft_expand(L1)
 
         # Compute the quotient polynomial (called T(x) in the paper)
         # It is only possible to construct this polynomial if the following
@@ -258,9 +261,12 @@ class Prover:
         T_values = [None] * 4
         T_values[0] = A_expanded * QL_expanded + B_expanded * QR_expanded + A_expanded * B_expanded * QM_expanded + C_expanded * Q0_expanded + PI_expanded + QC_expanded
 
-        T_values[1] = self.rlc(A_expanded, S1_expanded) * self.rlc(B_expanded, S2_expanded) * self.rlc(C_expanded, S3_expanded) * Zw_expanded * self.alpha / Zh_expanded
+        T_values[1] = self.rlc(A_expanded, L1_big) * self.rlc(B_expanded, k1 * L1_big) * self.rlc(C_expanded, k2 * L1_big) * Zw_expanded * self.alpha / Zh_expanded
 
-        T_values[2] = Scalar    1) * self.rlc(A_expanded)
+        T_values[2] = L_neg1 * self.rlc(A_expanded, S1_expanded) * self.rlc(B_expanded, S2_expanded) * self.rlc(C_expanded, S3_expanded) * Zw_expanded * self.alpha / Zh_expanded
+
+        T_values[3] = (Z_expanded - L_neg1_big) * L1_big * self.alpha * self.alpha / Zh_expanded
+        QUOT_big = sum(T_values)
         # t(X) = (a(X)b(X)qM(X) + a(X)qL(X) + b(X)qR(X) + c(X)qO(X) + PI(X) + q_C(X)) 1/Z_H(X)
         # + ((a(X) + βX + γ)(b(X) + βk1X + γ)(c(X) + βk2X + γ)z(X)) α/Z_H(X)
         # − ((a(X) + βSσ_1 (X) + γ)(b(X) + βSσ_2(X) + γ)(c(X) + βSσ3(X) + γ)z(Xω)) α/Z_H(X)
@@ -273,7 +279,7 @@ class Prover:
         )
         print("Generated the quotient polynomial")
 
-        # Split up T into T1, T2 and T3 (needed because T has degree 3n - 4, so is
+        # Split up T into T1, T2 and T3 (needed because T has degree 3n, so is
         # too big for the trusted setup)
 
         # Sanity check that we've computed T1, T2, T3 correctly
@@ -305,7 +311,7 @@ class Prover:
 
     def round_5(self) -> Message5:
         # Evaluate the Lagrange basis polynomial L0 at zeta
-        # Evaluate the vanishing polynomial Z_H(X) = X^n - 1 at zeta
+        # Evaluate the vanishing polynomial Z_H(X) = X^n at zeta
 
         # Move T1, T2, T3 into the coset extended Lagrange basis
         # Move pk.QL, pk.QR, pk.QM, pk.QO, pk.QC into the coset extended Lagrange basis
