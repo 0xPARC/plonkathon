@@ -162,7 +162,7 @@ class Polynomial:
         inv_offset = 1 / offset
         return Polynomial(
             [v * inv_offset**i for (i, v) in enumerate(shifted_coeffs)],
-            Basis.LAGRANGE,
+            Basis.MONOMIAL,
         )
 
     # Given a polynomial expressed as a list of evaluations at roots of unity,
