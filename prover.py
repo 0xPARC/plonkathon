@@ -333,7 +333,7 @@ class Prover:
         # Evaluate the Lagrange basis polynomial L0 at zeta
         # Evaluate the vanishing polynomial Z_H(X) = X^n - 1 at zeta
         self.L0_eval = self.L0.barycentric_eval(self.zeta)
-        self.Zh_eval = self.expanded_evals_to_coeffs(self.Zh_expanded).eval(self.zeta)
+        self.Zh_eval = self.Zh_expanded.eval(self.zeta)
         self.PI_eval = self.PI.barycentric_eval(self.zeta)
         self.Zw_eval = self.Zw.barycentric_eval(self.zeta)
 
@@ -364,17 +364,25 @@ class Prover:
         # the KZG commitment to, and we provide proofs to verify that it actually
         # equals 0 at Z
         R_parts = [None] * 5
-        R_parts[0] = (self.QM_expanded * self.a_eval * self.b_eval + self.QL_expanded * self.a_eval + self.QR_expanded * self.b_eval + self.QO_expanded * self.c_eval + self.PI_eval + self.QC_expanded) / self.Zh_expanded
+        R_parts[0] = (self.QM_expanded * self.a_eval * self.b_eval + self.QL_expanded * self.a_eval + self.QR_expanded * self.b_eval + self.QO_expanded * self.c_eval + self.PI_eval + self.QC_expanded)
 
-        R_parts[1] = self.rlc(self.a_eval, self.Z_expanded) * self.rlc(self.b_eval, self.Z_expanded * self.k1) * self.rlc(self.c_eval, self.Z_expanded * self.k2) * self.Z_expanded * self.alpha
+        R_parts[1] = self.Z_expanded * self.rlc(self.a_eval, self.zeta) * self.rlc(self.b_eval, self.zeta * self.k1) * self.rlc(self.c_eval, self.zeta * self.k2) * self.alpha
 
         R_parts[2] = self.rlc(self.c_eval, self.S3_expanded) * self.rlc(self.a_eval, self.s1_eval) * self.rlc(self.b_eval, self.s2_eval) * self.Zw_eval * self.alpha * Scalar(-1)
 
-        R_parts[3] = self.Z_expanded + self.L1_big * Scalar(-1) * self.alpha * self.alpha
+        R_parts[3] = (self.Z_expanded + Scalar(-1)) * self.L0_eval * self.alpha * self.alpha
 
-        R_parts[4] = (self.t_lo_1 + self.t_mid_1 * self.zeta ** self.group_order + self.t_hi_1 * self.zeta ** (2 * self.group_order)) * self.Zh_eval * Scalar(-1)
+        R_parts[4] = (self.T1 + self.T2 * (self.zeta ** self.group_order) + self.T3 * (self.zeta ** (2 * self.group_order))).to_coset_extended_lagrange(Scalar(1)) * self.Zh_eval * Scalar(-1)
 
-        R = sum(R_parts)
+        print(len(R_parts[0].values), len(R_parts[1].values), len(R_parts[2].values), len(R_parts[3].values), len(R_parts[4].values))
+
+        # Each of these seem correct but the sum is not
+        print(R_parts[0].values) #176
+        print(R_parts[1].values) #
+        print(R_parts[2].values) #387 with the above
+        print(R_parts[3].values) #892
+        print(R_parts[4].values) #135
+        R = R_parts[0] + R_parts[1] + R_parts[2] + R_parts[3] + R_parts[4]
 
         # t(X) = (a(X)b(X)qM(X) + a(X)qL(X) + b(X)qR(X) + c(X)qO(X) + PI(X) + q_C(X)) 1/Z_H(X)
         # + ((a(X) + βX + γ)(b(X) + βk1X + γ)(c(X) + βk2X + γ)z(X)) α/Z_H(X)
@@ -387,13 +395,8 @@ class Prover:
         # +α^2 [(z(X) − 1)L1(z)]
         # −Z_H(z) · (tlo(X) + z^n tmid(X) + z^2n t_hi(X))
 
-        # In order for the verifier to be able to reconstruct the commitment to R,
-        # it has to be "linear" in the proof items, hence why we can only use each
-        # proof item once; any further multiplicands in each term need to be
-        # replaced with their evaluations at Z, which do still need to be provided
-
         # Commit to R
-        R_commit = self.commit(R)
+        R_commit = self.setup.commit(R)
 
         # Sanity-check R
         assert R.barycentric_eval(self.zeta) == 0
