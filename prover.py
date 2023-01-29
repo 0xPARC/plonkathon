@@ -5,8 +5,6 @@ from typing import Optional
 from dataclasses import dataclass
 from transcript import Transcript, Message1, Message2, Message3, Message4, Message5
 from poly import Polynomial, Basis
-
-
 @dataclass
 class Proof:
     msg_1: Message1
@@ -188,8 +186,8 @@ class Prover:
     def round_3(self) -> Message3:
         group_order = self.group_order
         setup = self.setup
-        k1 = 2
-        k2 = 3
+        k1 = Scalar(2)
+        k2 = Scalar(3)
 
         # Compute the quotient polynomial
         alpha = self.alpha
@@ -219,8 +217,8 @@ class Prover:
         Z_expanded = self.fft_expand(self.Z)
 
         # Expand shifted Z(ω) into coset extended Lagrange basis
-        Zw = self.fft_expand(self.Z.shift(1))
-        Zw_expanded = self.fft_expand(Zw)
+        self.Zw = self.Z.shift(1)
+        Zw_expanded = self.fft_expand(self.Zw)
 
         # Expand permutation polynomials pk.S1, pk.S2, pk.S3 into coset
         # extended Lagrange basis
@@ -228,19 +226,19 @@ class Prover:
         S2_expanded = self.fft_expand(self.pk.S2)
         S3_expanded = self.fft_expand(self.pk.S3)
 
-        # Compute Z_H = X^N - 1, also in evaluation form in the coset
-        Zh_expanded = Polynomial([Scalar(-1)] + [Scalar(0)] * (group_order - 1) + [Scalar(1)] + [Scalar(0)] * (group_order * 3 - 1), Basis.MONOMIAL).fft()
-
         # Compute L0, the Lagrange basis polynomial that evaluates to 1 at x = 1 = ω^0
         # and 0 at other roots of unity
-        L_neg1 = Polynomial([Scalar(-1)] + [Scalar(0)] * (group_order - 1), Basis.MONOMIAL) # -1
-        L0 = Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE) # 1
-        L1 = Polynomial([Scalar(0)] + [Scalar(1)] + [Scalar(0)] * (group_order - 2), Basis.MONOMIAL) # x
+        # L_neg1 = Polynomial([Scalar(-1)] + [Scalar(0)] * (4 * group_order - 1), Basis.MONOMIAL) # -1
+        X = Polynomial([Scalar(0)] + [Scalar(1)] + [Scalar(0)] * (group_order - 2), Basis.MONOMIAL) # 1
+        L1 = Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE) # x
 
         # Expand L0 into the coset extended Lagrange basis
-        L_neg1_big = self.fft_expand(L_neg1)
-        L0_big = self.fft_expand(L0)
+        # L_neg1_big = L_neg1.fft()
+        X_big = self.fft_expand(X)
         L1_big = self.fft_expand(L1)
+
+        # Compute Z_H = X^N - 1, also in evaluation form in the coset
+        Zh_expanded = Polynomial([Scalar(-1)] + [Scalar(0)] * (group_order - 1) + [Scalar(1)] + [Scalar(0)] * (group_order * 3 - 1), Basis.MONOMIAL).return_new_with_offset(self.fft_cofactor).fft()
 
         # Compute the quotient polynomial (called T(x) in the paper)
         # It is only possible to construct this polynomial if the following
@@ -261,17 +259,17 @@ class Prover:
         T_values = [None] * 4
         T_values[0] = A_expanded * QL_expanded + B_expanded * QR_expanded + A_expanded * B_expanded * QM_expanded + C_expanded * Q0_expanded + PI_expanded + QC_expanded
 
-        T_values[1] = self.rlc(A_expanded, L1_big) * self.rlc(B_expanded, k1 * L1_big) * self.rlc(C_expanded, k2 * L1_big) * Zw_expanded * self.alpha / Zh_expanded
+        T_values[1] = self.rlc(A_expanded, X_big) * self.rlc(B_expanded, X_big * k1) * self.rlc(C_expanded, X_big * k2) * Z_expanded * self.alpha / Zh_expanded
 
-        T_values[2] = L_neg1 * self.rlc(A_expanded, S1_expanded) * self.rlc(B_expanded, S2_expanded) * self.rlc(C_expanded, S3_expanded) * Zw_expanded * self.alpha / Zh_expanded
+        T_values[2] = self.rlc(A_expanded, S1_expanded) * self.rlc(B_expanded, S2_expanded) * self.rlc(C_expanded, S3_expanded) * Zw_expanded * self.alpha * Scalar(-1) / Zh_expanded
 
-        T_values[3] = (Z_expanded - L_neg1_big) * L1_big * self.alpha * self.alpha / Zh_expanded
-        QUOT_big = sum(T_values)
+        T_values[3] = (Z_expanded + Scalar(-1)) * L1_big * self.alpha * self.alpha / Zh_expanded
+        QUOT_big = T_values[0] + T_values[1] + T_values[2] + T_values[3]
         # t(X) = (a(X)b(X)qM(X) + a(X)qL(X) + b(X)qR(X) + c(X)qO(X) + PI(X) + q_C(X)) 1/Z_H(X)
         # + ((a(X) + βX + γ)(b(X) + βk1X + γ)(c(X) + βk2X + γ)z(X)) α/Z_H(X)
         # − ((a(X) + βSσ_1 (X) + γ)(b(X) + βSσ_2(X) + γ)(c(X) + βSσ3(X) + γ)z(Xω)) α/Z_H(X)
         # + (z(X) − 1) L_1(X) α^2/Z_H(X)
-
+        T = QUOT_big
         # Sanity check: QUOT has degree < 3n
         assert (
             self.expanded_evals_to_coeffs(QUOT_big).values[-group_order:]
@@ -281,8 +279,15 @@ class Prover:
 
         # Split up T into T1, T2 and T3 (needed because T has degree 3n, so is
         # too big for the trusted setup)
+        # assert(len(T.values) == 4 * group_order)
+        T_poly = self.expanded_evals_to_coeffs(QUOT_big)
+
+        T1 = Polynomial(T_poly.values[:group_order], T_poly.basis).fft()
+        T2 = Polynomial(T_poly.values[group_order:2*group_order], T_poly.basis).fft()
+        T3 = Polynomial(T_poly.values[2*group_order:3*group_order], T_poly.basis).fft()
 
         # Sanity check that we've computed T1, T2, T3 correctly
+        fft_cofactor = self.fft_cofactor
         assert (
             T1.barycentric_eval(fft_cofactor)
             + T2.barycentric_eval(fft_cofactor) * fft_cofactor**group_order
@@ -292,24 +297,27 @@ class Prover:
         print("Generated T1, T2, T3 polynomials")
 
         # Compute commitments t_lo_1, t_mid_1, t_hi_1 to T1, T2, T3 polynomials
-
+        t_lo_1 = setup.commit(T1)
+        t_mid_1 = setup.commit(T2)
+        t_hi_1 = setup.commit(T3)
         # Return t_lo_1, t_mid_1, t_hi_1
         return Message3(t_lo_1, t_mid_1, t_hi_1)
 
     def round_4(self) -> Message4:
         # Compute evaluations to be used in constructing the linearization polynomial.
-
-        # Compute a_eval = A(zeta)
-        # Compute b_eval = B(zeta)
-        # Compute c_eval = C(zeta)
-        # Compute s1_eval = pk.S1(zeta)
-        # Compute s2_eval = pk.S2(zeta)
-        # Compute z_shifted_eval = Z(zeta * ω)
+        zeta_poly = Polynomial([Scalar(1)] * self.group_order, Basis.MONOMIAL).return_new_with_offset(self.zeta).fft()
+        a_eval = sum((self.A * zeta_poly).values)
+        b_eval = sum((self.B * zeta_poly).values)
+        c_eval = sum((self.C * zeta_poly).values)
+        s1_eval = sum((self.pk.S1 * zeta_poly).values)
+        s2_eval = sum((self.pk.S2 * zeta_poly).values)
+        z_shifted_eval = sum((self.Zw * zeta_poly).values)
 
         # Return a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval
         return Message4(a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval)
 
     def round_5(self) -> Message5:
+
         # Evaluate the Lagrange basis polynomial L0 at zeta
         # Evaluate the vanishing polynomial Z_H(X) = X^n at zeta
 
@@ -326,7 +334,13 @@ class Prover:
         # that we are checking are correct, and which the verifier can reconstruct
         # the KZG commitment to, and we provide proofs to verify that it actually
         # equals 0 at Z
-        #
+
+        # r(X) = ̄a ̄b · qM(X) + ̄a · qL(X) + ̄b · qR(X) + ̄c · qO(X) + PI(z) + qC(X) +
+        # α[( ̄a + βz + γ)( ̄b + βk1z + γ)( ̄c + βk2z + γ) · z(X)
+        # −( ̄a + β ̄sσ1 + γ)( ̄b + β ̄sσ2 + γ)( ̄c + β · Sσ3 (X) + γ) ̄zω]
+        # +α^2 [(z(X) − 1)L1(z)]
+        # −Z_H(z) · (tlo(X) + z^n tmid(X) + z^2n t_hi(X))
+
         # In order for the verifier to be able to reconstruct the commitment to R,
         # it has to be "linear" in the proof items, hence why we can only use each
         # proof item once; any further multiplicands in each term need to be
