@@ -54,7 +54,7 @@ class Prover:
 
         # Collect fixed and public information
         # FIXME: Hash pk and PI into transcript
-        ## Checking step 1 - that inputs were encoded correctly
+        # Checking step 1 - that inputs were encoded correctly
         # polynomial of public inputes
         public_vars = self.program.get_public_assignments()
         print("=== public vars")
@@ -116,17 +116,20 @@ class Prover:
 
         n_wires = len(program.wires())
         self.A = Polynomial(
-            list(map(Scalar, [witness[program.wires()[i].L] for i in range(n_wires)]))
+            list(map(Scalar, [witness[program.wires()[i].L]
+                 for i in range(n_wires)]))
             + [Scalar(0)] * (group_order - n_wires),
             Basis.LAGRANGE,
         )
         self.B = Polynomial(
-            list(map(Scalar, [witness[program.wires()[i].R] for i in range(n_wires)]))
+            list(map(Scalar, [witness[program.wires()[i].R]
+                 for i in range(n_wires)]))
             + [Scalar(0)] * (group_order - n_wires),
             Basis.LAGRANGE,
         )
         self.C = Polynomial(
-            list(map(Scalar, [witness[program.wires()[i].O] for i in range(n_wires)]))
+            list(map(Scalar, [witness[program.wires()[i].O]
+                 for i in range(n_wires)]))
             + [Scalar(0)] * (group_order - n_wires),
             Basis.LAGRANGE,
         )
@@ -213,7 +216,8 @@ class Prover:
         # List of roots of unity at 4x fineness, i.e. the powers of µ
         # where µ^(4n) = 1
         roots_of_unity4 = self.fft_expand(
-            Polynomial(Scalar.roots_of_unity(group_order), basis=Basis.LAGRANGE)
+            Polynomial(Scalar.roots_of_unity(
+                group_order), basis=Basis.LAGRANGE)
         )
         print("roots of unity 4", roots_of_unity4.ifft().values)
 
@@ -249,7 +253,8 @@ class Prover:
 
         # Compute Z_H = X^N - 1, also in evaluation form in the coset
         nth = self.fft_expand(
-            Polynomial(Scalar.roots_of_unity(group_order), basis=Basis.LAGRANGE)
+            Polynomial(Scalar.roots_of_unity(
+                group_order), basis=Basis.LAGRANGE)
         )
         z_h = nth
         for _ in range(group_order - 1):
@@ -264,7 +269,8 @@ class Prover:
         L0_big = (
             self.fft_expand(
                 Polynomial(
-                    [Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE
+                    [Scalar(1)] + [Scalar(0)] *
+                    (group_order - 1), Basis.LAGRANGE
                 )
             )
             * Scalar(self.alpha)
@@ -324,16 +330,17 @@ class Prover:
         # too big for the trusted setup)
         T1 = Polynomial(QUOTE_expanded[:group_order], Basis.MONOMIAL).fft()
         T2 = Polynomial(
-            QUOTE_expanded[group_order : 2 * group_order], Basis.MONOMIAL
+            QUOTE_expanded[group_order: 2 * group_order], Basis.MONOMIAL
         ).fft()
         T3 = Polynomial(
-            QUOTE_expanded[2 * group_order : 3 * group_order], Basis.MONOMIAL
+            QUOTE_expanded[2 * group_order: 3 * group_order], Basis.MONOMIAL
         ).fft()
 
         # Sanity check that we've computed T1, T2, T3 correctly
         assert (
             T1.barycentric_eval(self.fft_cofactor)
-            + T2.barycentric_eval(self.fft_cofactor) * self.fft_cofactor**group_order
+            + T2.barycentric_eval(self.fft_cofactor) *
+            self.fft_cofactor**group_order
             + T3.barycentric_eval(self.fft_cofactor)
             * self.fft_cofactor ** (group_order * 2)
         ) == QUOT_big.values[0]
@@ -357,6 +364,14 @@ class Prover:
         # Compute s1_eval = pk.S1(zeta)
         # Compute s2_eval = pk.S2(zeta)
         # Compute z_shifted_eval = Z(zeta * ω)
+
+        a_eval = self.A.barycentric_eval(self.zeta)
+        b_eval = self.B.barycentric_eval(self.zeta)
+        c_eval = self.C.barycentric_eval(self.zeta)
+        s1_eval = self.pk.S1.barycentric_eval(self.zeta)
+        s2_eval = self.pk.S2.barycentric_eval(self.zeta)
+        z_shifted_eval = self.Z_values_poly.barycentric_eval(
+            Scalar.root_of_unity(self.group_order) * self.zeta)
 
         # Return a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval
         return Message4(a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval)
