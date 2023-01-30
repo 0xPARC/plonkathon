@@ -46,11 +46,24 @@ class Prover:
     C: Polynomial
     Z: Polynomial
     PI: Polynomial
+    L0: Polynomial
+    Z_H: Polynomial
+    T1: Polynomial
+    T2: Polynomial 
+    T3: Polynomial 
     beta: Scalar
     gamma: Scalar
     zeta: Scalar
     fft_cofactor: Scalar
     alpha: Scalar
+
+    a_eval: Scalar 
+    b_eval: Scalar 
+    c_eval: Scalar
+
+    s1_eval: Scalar 
+    s2_eval: Scalar 
+    z_shift_eval: Scalar
 
     def __init__(self, setup: Setup, program: Program):
         self.group_order = program.group_order
@@ -168,24 +181,27 @@ class Prover:
 
         roots_of_unity = Scalar.roots_of_unity(group_order)
 
-        F_values = [0 for _ in range(group_order)]
-        G_values = [0 for _ in range(group_order)]
-
         # Using A, B, C, values, and pk.S1, pk.S2, pk.S3, compute
         # Z_values for permutation grand product polynomial Z
-        #
-        # Note the convenience function:
-        #       self.rlc(val1, val2) = val_1 + self.beta * val_2 + gamma
 
+        # Construct an array to store the accumulated Z polynomial values
         Z_values = [Scalar(0) for _ in range(group_order + 1)]
+
+        # the first value of the Z polynomial should be 1
         Z_values[0] = Scalar(1)
 
         for i in range(group_order):
-            F_values[i] = self.rlc(self.A.values[i], roots_of_unity[i])*self.rlc(
+
+            # f is the value we get from multiplying the random linear combination of each A, B, and C polynomial evaluations and this i 
+            F_value = self.rlc(self.A.values[i], roots_of_unity[i])*self.rlc(
                 self.B.values[i], 2 * roots_of_unity[i]) * self.rlc(self.C.values[i], 3 * roots_of_unity[i])
-            G_values[i] = self.rlc(self.A.values[i], self.pk.S1.values[i]) * self.rlc(
+
+            # f is the value we get from multiplying the random linear combination of each A, B, and C polynomial evaluations, with permutation 
+            G_value = self.rlc(self.A.values[i], self.pk.S1.values[i]) * self.rlc(
                 self.B.values[i], self.pk.S2.values[i]) * self.rlc(self.C.values[i], self.pk.S3.values[i])
-            Z_values[i+1] = Z_values[i]*Scalar(F_values[i]/G_values[i])
+            
+            # the Z_value at i + 1 is the Z_value at i (previous Z value) multiplied with F/G.
+            Z_values[i+1] = Z_values[i]*Scalar(F_value/G_value)
 
         # Check that the last term Z_n = 1
         assert Z_values.pop() == 1
@@ -207,6 +223,7 @@ class Prover:
         # Construct Z, Lagrange interpolation polynomial for Z_values
         Z = Polynomial(Z_values, Basis.LAGRANGE)
         self.Z = Z
+
         # Cpmpute z_1 commitment to Z polynomial
         z_1 = setup.commit(Z)
 
@@ -265,9 +282,6 @@ class Prover:
         # shifted_Z = Polynomial(results_shifted, Basis.LAGRANGE)
         shifted_Z = expanded_Z.shift(4)
 
-        print("expanded_Z")
-        print(expanded_Z.values)
-
 
         # Expand permutation polynomials pk.S1, pk.S2, pk.S3 into coset
         # extended Lagrange basis
@@ -286,14 +300,14 @@ class Prover:
         Z_H = Polynomial([(((self.fft_cofactor*Scalar(x)) ** group_order) - 1)
                          for x in expanded_rou], Basis.LAGRANGE)
 
-        print("Z_H")
-        print(Z_H.values)
+        self.Z_H = Z_H
 
         # Compute L0, the Lagrange basis polynomial that evaluates to 1 at x = 1 = ω^0
         # and 0 at other roots of unity
 
         L0 = Polynomial([Scalar(1)] + [Scalar(0)
                         for _ in range(group_order - 1)], Basis.LAGRANGE)
+        self.L0 = L0
 
         # Expand L0 into the coset extended Lagrange basis
         L0_big = self.fft_expand(
@@ -354,7 +368,6 @@ class Prover:
         #    L0 = Lagrange polynomial, equal at all roots of unity except 1
 
         # Sanity check: QUOT has degree < 3n
-        print(self.expanded_evals_to_coeffs(QUOT_big).values)
         # print(self.expanded_evals_to_coeffs(QUOT_big).values[-group_order:])
         assert (
             self.expanded_evals_to_coeffs(QUOT_big).values[-group_order:]
@@ -371,6 +384,10 @@ class Prover:
         T1 = Polynomial(QUOT_coeffs.values[0: group_order], Basis.MONOMIAL).fft()
         T2 = Polynomial(QUOT_coeffs.values[group_order:2*group_order], Basis.MONOMIAL).fft()
         T3 = Polynomial(QUOT_coeffs.values[2*group_order: 3*group_order], Basis.MONOMIAL).fft()
+
+        self.T1 = T1
+        self.T2 = T2 
+        self.T3 = T3 
 
         # Sanity check that we've computed T1, T2, T3 correctly
         assert (
@@ -395,24 +412,57 @@ class Prover:
         # Compute evaluations to be used in constructing the linearization polynomial.
 
         # Compute a_eval = A(zeta)
-        a_eval = self.A.barycentric_eval()
+        a_eval = self.A.barycentric_eval(self.zeta)
+        self.a_eval = a_eval 
+
         # Compute b_eval = B(zeta)
+        b_eval = self.B.barycentric_eval(self.zeta)
+        self.b_eval = b_eval 
+
         # Compute c_eval = C(zeta)
+        c_eval = self.C.barycentric_eval(self.zeta)
+        self.c_eval = c_eval 
+
         # Compute s1_eval = pk.S1(zeta)
+        s1_eval = self.pk.S1.barycentric_eval(self.zeta)
+        self.s1_eval = s1_eval
         # Compute s2_eval = pk.S2(zeta)
+        s2_eval = self.pk.S2.barycentric_eval(self.zeta)
+        self.s2_eval = s2_eval
+
         # Compute z_shifted_eval = Z(zeta * ω)
+        z_shifted_eval = self.Z.barycentric_eval(self.zeta*Scalar.root_of_unity(self.group_order))
+        self.z_shift_eval = z_shifted_eval 
 
         # Return a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval
         return Message4(a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval)
 
     def round_5(self) -> Message5:
         # Evaluate the Lagrange basis polynomial L0 at zeta
+        L0_eval = self.L0.barycentric_eval(self.zeta)
         # Evaluate the vanishing polynomial Z_H(X) = X^n at zeta
+        Z_H_eval = self.Z_H.barycentric_eval(self.zeta)
+        PI_eval = self.PI.barycentric_eval(self.zeta)
+
 
         # Move T1, T2, T3 into the coset extended Lagrange basis
+
+        expanded_T1 = self.fft_expand(self.T1)
+        expanded_T2 = self.fft_expand(self.T2)
+        expanded_T3 = self.fft_expand(self.T3)
+
         # Move pk.QL, pk.QR, pk.QM, pk.QO, pk.QC into the coset extended Lagrange basis
+
+        expanded_QL = self.fft_expand(self.pk.QL)
+        expanded_QR = self.fft_expand(self.pk.QR)
+        expanded_QM = self.fft_expand(self.pk.QM)
+        expanded_QC = self.fft_expand(self.pk.QC)
+        expanded_QO = self.fft_expand(self.pk.QO)
+
         # Move Z into the coset extended Lagrange basis
+        expanded_Z = self.fft_expand(self.Z)
         # Move pk.S3 into the coset extended Lagrange basis
+        expanded_S3 = self.fft_expand(self.pk.S3)
 
         # Compute the "linearization polynomial" R. This is a clever way to avoid
         # needing to provide evaluations of _all_ the polynomials that we are
@@ -427,8 +477,29 @@ class Prover:
         # it has to be "linear" in the proof items, hence why we can only use each
         # proof item once; any further multiplicands in each term need to be
         # replaced with their evaluations at Z, which do still need to be provided
+        R = (
+        self.a_eval*self.b_eval * expanded_QM + self.a_eval*expanded_QL + self.b_eval*expanded_QO + PI_eval + expanded_QC
+        ) + (
+          self.alpha 
+          * (
+            self.rlc(self.a_eval, self.zeta)* self.rlc(self.b_eval, self.zeta*Scalar(2)) * self.rlc(self.c_eval, self.zeta*Scalar(3))*expanded_Z
+            - self.rlc(self.a_eval, self.s1_eval)* self.rlc(self.b_eval, self.s2_eval) * self.rlc(self.c_eval, expanded_S3)*self.z_shift_eval
+          )
+        ) + (
+            (self.alpha * self.alpha) * (
+                (expanded_Z - Scalar(1)) * L0_eval
+            )
+        ) - (
+            Z_H_eval * (expanded_T1 + (self.zeta ** self.group_order)*expanded_T2 + (self.zeta **(2*self.group_order) *expanded_T3)
+            )
+        )
+
+        zeta = self.zeta
+        
 
         # Commit to R
+
+        self.setup.commit(R)
 
         # Sanity-check R
         assert R.barycentric_eval(zeta) == 0
@@ -437,6 +508,7 @@ class Prover:
 
         # Generate proof that W(z) = 0 and that the provided evaluations of
         # A, B, C, S1, S2 are correct
+        
 
         # Move A, B, C into the coset extended Lagrange basis
         # Move pk.S1, pk.S2 into the coset extended Lagrange basis
