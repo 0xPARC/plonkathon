@@ -65,6 +65,9 @@ class Prover:
     s2_eval: Scalar 
     z_shift_eval: Scalar
 
+    X: Polynomial
+    v: Scalar
+
     def __init__(self, setup: Setup, program: Program):
         self.group_order = program.group_order
         self.setup = setup
@@ -316,6 +319,8 @@ class Prover:
         )
 
         X = Polynomial(expanded_rou, Basis.LAGRANGE)
+
+        self.X = X 
         two_X = Polynomial([Scalar(2)* x for x in expanded_rou], Basis.LAGRANGE)
         three_X = Polynomial([Scalar(3)* x for x in expanded_rou], Basis.LAGRANGE)
 
@@ -440,8 +445,13 @@ class Prover:
     def round_5(self) -> Message5:
         # Evaluate the Lagrange basis polynomial L0 at zeta
         L0_eval = self.L0.barycentric_eval(self.zeta)
-        # Evaluate the vanishing polynomial Z_H(X) = X^n at zeta
-        Z_H_eval = self.Z_H.barycentric_eval(self.zeta)
+        # Evaluate the vanishing polynomial Z_H(X) = X^n at zeta\
+        # TODO: why do expanded and non expandded polynomials give u diff assessments 
+        Z_H_eval_ex = self.Z_H.barycentric_eval(self.zeta)
+        print("zh")
+        print(Z_H_eval_ex)
+        Z_H_eval = self.zeta ** self.group_order - 1
+        print(Z_H_eval)
         PI_eval = self.PI.barycentric_eval(self.zeta)
 
 
@@ -477,32 +487,49 @@ class Prover:
         # it has to be "linear" in the proof items, hence why we can only use each
         # proof item once; any further multiplicands in each term need to be
         # replaced with their evaluations at Z, which do still need to be provided
+        group_order = self.group_order 
+
+        c_eval = Polynomial([self.c_eval] * group_order * 4, Basis.LAGRANGE)
         R = (
-        self.a_eval*self.b_eval * expanded_QM + self.a_eval*expanded_QL + self.b_eval*expanded_QO + PI_eval + expanded_QC
+        expanded_QM * self.a_eval*self.b_eval
+        + expanded_QL * self.a_eval
+        + expanded_QR * self.b_eval
+        + expanded_QO * self.c_eval
+        + PI_eval 
+        + expanded_QC
         ) + (
-          self.alpha 
-          * (
-            self.rlc(self.a_eval, self.zeta)* self.rlc(self.b_eval, self.zeta*Scalar(2)) * self.rlc(self.c_eval, self.zeta*Scalar(3))*expanded_Z
-            - self.rlc(self.a_eval, self.s1_eval)* self.rlc(self.b_eval, self.s2_eval) * self.rlc(self.c_eval, expanded_S3)*self.z_shift_eval
-          )
-        ) + (
-            (self.alpha * self.alpha) * (
+          (
+            expanded_Z
+            * (self.rlc(self.a_eval, self.zeta)
+            * self.rlc(self.b_eval, self.zeta*Scalar(2)) 
+            * self.rlc(self.c_eval, self.zeta*Scalar(3)))
+
+            - (self.rlc(c_eval, expanded_S3)
+            * self.rlc(self.b_eval, self.s2_eval) 
+            * self.rlc(self.a_eval, self.s1_eval)) *self.z_shift_eval
+        ) * self.alpha
+        )   + (
+             (
                 (expanded_Z - Scalar(1)) * L0_eval
-            )
+            ) * (self.alpha * self.alpha)
         ) - (
-            Z_H_eval * (expanded_T1 + (self.zeta ** self.group_order)*expanded_T2 + (self.zeta **(2*self.group_order) *expanded_T3)
-            )
+             (expanded_T1 + expanded_T2* (self.zeta ** self.group_order) + expanded_T3* (self.zeta **(2*self.group_order) )
+            ) * Z_H_eval
         )
 
         zeta = self.zeta
-        
 
+
+        R_coeffs = self.expanded_evals_to_coeffs(R).values
+        assert R_coeffs[group_order:] == [0] * (group_order * 3)
+        
+        R_actual = Polynomial(R_coeffs[0:group_order], Basis.MONOMIAL).fft()
         # Commit to R
 
-        self.setup.commit(R)
+        self.setup.commit(R_actual)
 
         # Sanity-check R
-        assert R.barycentric_eval(zeta) == 0
+        assert R_actual.barycentric_eval(zeta) == 0
 
         print("Generated linearization polynomial R")
 
@@ -511,7 +538,15 @@ class Prover:
         
 
         # Move A, B, C into the coset extended Lagrange basis
+
+        expanded_A = self.fft_expand(self.A)
+        expanded_B = self.fft_expand(self.B)
+        expanded_C = self.fft_expand(self.C)
+
         # Move pk.S1, pk.S2 into the coset extended Lagrange basis
+
+        expanded_S1 = self.fft_expand(self.pk.S1)
+        expanded_S2 = self.fft_expand(self.pk.S2)
 
         # In the COSET EXTENDED LAGRANGE BASIS,
         # Construct W_Z = (
@@ -523,21 +558,44 @@ class Prover:
         #   + v**5 * (S2 - s2_eval)
         # ) / (X - zeta)
 
+        W_Z = (
+            R
+            + ((expanded_A - self.a_eval) * self.v)
+            + ((expanded_B - self.b_eval) * (self.v ** 2))
+            + ((expanded_C - self.c_eval) * (self.v ** 3))
+            + ((expanded_S1 - self.s1_eval) * (self.v ** 4))
+            + ((expanded_S2 - self.s2_eval) * (self.v ** 5))
+        ) / (self.X * self.fft_cofactor  - self.zeta)
+
+        W_z_coeffs = self.expanded_evals_to_coeffs(W_Z).values
+        group_order = self.group_order
+
+        # TODO: check the basis of each polynomial and whether we can just do addition between thm
+
         # Check that degree of W_z is not greater than n
         assert W_z_coeffs[group_order:] == [0] * (group_order * 3)
 
         # Compute W_z_1 commitment to W_z
+        W_z_1 = self.setup.commit(W_Z)
 
         # Generate proof that the provided evaluation of Z(z*w) is correct. This
         # awkwardly different term is needed because the permutation accumulator
         # polynomial Z is the one place where we have to check between adjacent
         # coordinates, and not just within one coordinate.
+
+        # TODO: understand this !!!!
+
         # In other words: Compute W_zw = (Z - z_shifted_eval) / (X - zeta * ω)
+
+        W_zw = (expanded_Z - self.z_shift_eval) / (self.X*self.fft_cofactor  - (self.zeta * Scalar.root_of_unity(group_order)))
+        W_zw_coeffs = self.expanded_evals_to_coeffs(W_zw).values
 
         # Check that degree of W_z is not greater than n
         assert W_zw_coeffs[group_order:] == [0] * (group_order * 3)
 
         # Compute W_z_1 commitment to W_z
+
+        W_zw_1 = self.setup.commit(W_zw)
 
         print("Generated final quotient witness polynomials")
 
