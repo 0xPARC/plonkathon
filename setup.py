@@ -1,6 +1,6 @@
 from utils import *
 import py_ecc.bn128 as b
-from curve import ec_lincomb, G1Point, G2Point
+from curve import ec_lincomb, Scalar, G1Point, G2Point
 from compiler.program import CommonPreprocessedInput
 from verifier import VerificationKey
 from dataclasses import dataclass
@@ -69,9 +69,37 @@ class Setup(object):
         # Run inverse FFT to convert values from Lagrange basis to monomial basis
         # Optional: Check values size does not exceed maximum power setup can handle
         # Compute linear combination of setup with values
-        return NotImplemented
+        poly_monomial = values.ifft()
+        return ec_lincomb(list(zip(self.powers_of_x, poly_monomial.values)))
 
     # Generate the verification key for this program with the given setup
     def verification_key(self, pk: CommonPreprocessedInput) -> VerificationKey:
         # Create the appropriate VerificationKey object
-        return NotImplemented
+        """
+        # This implementation gives a different root of unity; they use 5, not 3.
+        def modpow(base, exp, mod):
+          if exp == 0:
+            return 1
+          if exp == 1:
+            return base % mod
+          if exp % 2 == 0:
+            return modpow(base * base % mod, exp // 2, mod)
+          return base * modpow(base * base % mod, exp // 2, mod) % mod
+
+        order = b.curve_order
+        w = modpow(3, (order - 1) // pk.group_order, order)
+        print(w ** pk.group_order % order, w)
+        """
+
+        w = Scalar.root_of_unity(pk.group_order)
+        return VerificationKey(group_order = pk.group_order,
+                               Qm = self.commit(pk.QM),
+                               Ql = self.commit(pk.QL),
+                               Qr = self.commit(pk.QR),
+                               Qo = self.commit(pk.QO),
+                               Qc = self.commit(pk.QC),
+                               S1 = self.commit(pk.S1),
+                               S2 = self.commit(pk.S2),
+                               S3 = self.commit(pk.S3),
+                               X_2 = self.X2,
+                               w = w)
