@@ -98,11 +98,22 @@ class Prover:
         # - A_values: witness[program.wires()[i].L]
         # - B_values: witness[program.wires()[i].R]
         # - C_values: witness[program.wires()[i].O]
+        filler = [Scalar(0) for i in range(self.group_order - len(program.wires()))]
+
+        A_values = [Scalar(witness[program.wires()[i].L]) for i in range(len(program.wires()))] + filler
+        B_values = [Scalar(witness[program.wires()[i].R]) for i in range(len(program.wires()))] + filler
+        C_values = [Scalar(witness[program.wires()[i].O]) for i in range(len(program.wires()))] + filler
 
         # Construct A, B, C Lagrange interpolation polynomials for
         # A_values, B_values, C_values
+        self.A = Polynomial(A_values, Basis.LAGRANGE)
+        self.B = Polynomial(B_values, Basis.LAGRANGE)
+        self.C = Polynomial(C_values, Basis.LAGRANGE)
 
         # Compute a_1, b_1, c_1 commitments to A, B, C polynomials
+        a_1 = setup.commit(self.A)
+        b_1 = setup.commit(self.B)
+        c_1 = setup.commit(self.C)
 
         # Sanity check that witness fulfils gate constraints
         assert (
@@ -313,3 +324,4 @@ class Prover:
 
     def rlc(self, term_1, term_2):
         return term_1 + term_2 * self.beta + self.gamma
+
