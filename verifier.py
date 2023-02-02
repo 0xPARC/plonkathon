@@ -74,6 +74,7 @@ class VerificationKey:
     # Basic, easier-to-understand version of what's going on
     def verify_proof_unoptimized(self, group_order: int, pf, public=[]) -> bool:
         # 4. Compute challenges
+        
 
         # 5. Compute zero polynomial evaluation Z_H(ζ) = ζ^n - 1
 
