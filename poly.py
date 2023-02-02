@@ -5,6 +5,8 @@ from enum import Enum
 class Basis(Enum):
     LAGRANGE = 1
     MONOMIAL = 2
+    OFFSET_LAGRANGE = 3
+    OFFSET_MONOMIAL = 4
 
 
 class Polynomial:
@@ -31,7 +33,7 @@ class Polynomial:
             )
         else:
             assert isinstance(other, Scalar)
-            if self.basis == Basis.LAGRANGE:
+            if self.basis == Basis.LAGRANGE or self.basis == Basis.OFFSET_LAGRANGE:
                 return Polynomial(
                     [x + other for x in self.values],
                     self.basis,
@@ -53,7 +55,7 @@ class Polynomial:
             )
         else:
             assert isinstance(other, Scalar)
-            if self.basis == Basis.LAGRANGE:
+            if self.basis == Basis.LAGRANGE or self.basis == Basis.OFFSET_LAGRANGE:
                 return Polynomial(
                     [x - other for x in self.values],
                     self.basis,
@@ -67,7 +69,7 @@ class Polynomial:
 
     def __mul__(self, other):
         if isinstance(other, Polynomial):
-            assert self.basis == Basis.LAGRANGE
+            assert self.basis == Basis.LAGRANGE or self.basis == Basis.OFFSET_LAGRANGE
             assert self.basis == other.basis
             assert len(self.values) == len(other.values)
 
@@ -84,7 +86,7 @@ class Polynomial:
 
     def __truediv__(self, other):
         if isinstance(other, Polynomial):
-            assert self.basis == Basis.LAGRANGE
+            assert self.basis == Basis.LAGRANGE or self.basis == Basis.OFFSET_LAGRANGE
             assert self.basis == other.basis
             assert len(self.values) == len(other.values)
 
@@ -129,19 +131,27 @@ class Polynomial:
         roots = [x.n for x in Scalar.roots_of_unity(len(self.values))]
         o, nvals = Scalar.field_modulus, [x.n for x in self.values]
         if inv:
-            assert self.basis == Basis.LAGRANGE
+            assert self.basis == Basis.LAGRANGE or self.basis == Basis.OFFSET_LAGRANGE
+            if self.basis == Basis.LAGRANGE:
+                new_basis = Basis.MONOMIAL
+            elif self.basis == Basis.OFFSET_LAGRANGE:
+                new_basis = Basis.OFFSET_MONOMIAL
             # Inverse FFT
             invlen = Scalar(1) / len(self.values)
             reversed_roots = [roots[0]] + roots[1:][::-1]
             return Polynomial(
                 [Scalar(x) * invlen for x in _fft(nvals, o, reversed_roots)],
-                Basis.MONOMIAL,
+                new_basis,
             )
         else:
-            assert self.basis == Basis.MONOMIAL
+            assert self.basis == Basis.MONOMIAL or self.basis == Basis.OFFSET_MONOMIAL
             # Regular FFT
+            if self.basis == Basis.MONOMIAL:
+                new_basis = Basis.LAGRANGE
+            elif self.basis == Basis.OFFSET_MONOMIAL:
+                new_basis = Basis.OFFSET_LAGRANGE
             return Polynomial(
-                [Scalar(x) for x in _fft(nvals, o, roots)], Basis.LAGRANGE
+                [Scalar(x) for x in _fft(nvals, o, roots)], new_basis
             )
 
     def ifft(self):
@@ -160,7 +170,7 @@ class Polynomial:
         x_powers = [(offset**i * x) for i, x in enumerate(x_powers)] + [Scalar(0)] * (
             group_order * 3
         )
-        return Polynomial(x_powers, Basis.MONOMIAL).fft()
+        return Polynomial(x_powers, Basis.OFFSET_MONOMIAL).fft()
 
     #Converts a list of coefficients to
     # a list of evaluations at
@@ -168,18 +178,22 @@ class Polynomial:
     def fft_to_coset_lagrange(self, offset):
         assert self.basis == Basis.MONOMIAL
         x_powers = [(offset**i * x) for i, x in enumerate(self.values)]
-        return Polynomial(x_powers, Basis.MONOMIAL).fft()
+        return Polynomial(x_powers, Basis.OFFSET_MONOMIAL).fft()
 
     def lagrange_to_coset_lagrange(self, offset):
         assert self.basis == Basis.LAGRANGE
         return self.ifft().fft_to_coset_lagrange(offset)
+
+    def lagrange_expand_to_coset_lagrange(self, offset):
+        assert self.basis == Basis.LAGRANGE
+        return self.to_coset_extended_lagrange(offset)
 
     # Convert from offset form into coefficients
     # Note that we can't make a full inverse function of to_coset_extended_lagrange
     # because the output of this might be a deg >= n polynomial, which cannot
     # be expressed via evaluations at n roots of unity
     def coset_extended_lagrange_to_coeffs(self, offset):
-        assert self.basis == Basis.LAGRANGE
+        assert self.basis == Basis.OFFSET_LAGRANGE
 
         shifted_coeffs = self.ifft().values
         inv_offset = 1 / offset
@@ -187,6 +201,10 @@ class Polynomial:
             [v * inv_offset**i for (i, v) in enumerate(shifted_coeffs)],
             Basis.MONOMIAL,
         )
+
+    def eval_coset_lagrange(self, x: Scalar, offset):
+        assert self.basis == Basis.OFFSET_LAGRANGE
+        return self.coset_extended_lagrange_to_coeffs(offset).fft().barycentric_eval(x)
 
     # Given a polynomial expressed as a list of evaluations at roots of unity,
     # evaluate it at x directly, without using an FFT to covert to coeffs first

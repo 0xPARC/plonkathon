@@ -79,6 +79,23 @@ class Setup(object):
 
         return result
 
+    def commit_extended(self, values: Polynomial, offset: Scalar) -> G1Point:
+        assert values.basis == Basis.OFFSET_LAGRANGE
+
+        # Run inverse FFT to convert values from Lagrange basis to monomial basis
+        # Optional: Check values size does not exceed maximum power setup can handle
+        # Compute linear combination of setup with values
+
+        deg = len(values.values)
+        assert (deg & (deg-1) == 0)
+
+        coeffs = values.coset_extended_lagrange_to_coeffs(offset)
+        pairs = list(zip(self.powers_of_x, coeffs.values))
+        result = ec_lincomb(pairs)
+
+
+        return result
+
     # Generate the verification key for this program with the given setup
     def verification_key(self, pk: CommonPreprocessedInput) -> VerificationKey:
         # Create the appropriate VerificationKey object
