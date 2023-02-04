@@ -1,4 +1,5 @@
 import py_ecc.bn128 as b
+# from prover import Proof
 from utils import *
 from dataclasses import dataclass
 from curve import *
@@ -73,15 +74,31 @@ class VerificationKey:
     # Basic, easier-to-understand version of what's going on
     def verify_proof_unoptimized(self, group_order: int, pf, public=[]) -> bool:
         # 4. Compute challenges
+        beta, gamma, alpha, zeta, v, u = self.compute_challenges(pf)
 
         # 5. Compute zero polynomial evaluation Z_H(ζ) = ζ^n - 1
+        ZH_eval = zeta ** group_order - 1
 
         # 6. Compute Lagrange polynomial evaluation L_0(ζ)
+        L0 = Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE)
+        L0_eval = L0.barycentric_eval(zeta)
 
         # 7. Compute public input polynomial evaluation PI(ζ).
+        public_vars = public
+        PI = Polynomial(
+            [Scalar(v) for v in public_vars]
+            + [Scalar(0) for _ in range(self.group_order - len(public_vars))],
+            Basis.LAGRANGE,
+        )
+        PI_eval = PI.barycentric_eval(zeta)
+        print(public)
+        print(pf)
 
         # Recover the commitment to the linearization polynomial R,
         # exactly the same as what was created by the prover
+        k_1 = 2
+        k_2 = 3
+        raise NotImplementedError
 
         # Verify that R(z) = 0 and the prover-provided evaluations
         # A(z), B(z), C(z), S1(z), S2(z) are all correct
