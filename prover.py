@@ -94,6 +94,35 @@ class Prover:
         if None not in witness:
             witness[None] = 0
 
+        def get_coeffs(wire_name_getter_fn):
+            res = []
+            for constr in program.constraints:
+                key = wire_name_getter_fn(constr)
+                val = Scalar(witness.get(
+                    wire_name_getter_fn(constr), 0
+                ))
+                res.append(val)
+
+            while len(res) < group_order:
+                res.append(Scalar(0))
+
+            return res
+
+        self.A = Polynomial(
+            get_coeffs(lambda constr: constr.wires.L),
+            Basis.LAGRANGE
+        )
+
+        self.B = Polynomial(
+            get_coeffs(lambda constr: constr.wires.R),
+            Basis.LAGRANGE
+        )
+
+        self.C = Polynomial(
+            get_coeffs(lambda constr: constr.wires.O),
+            Basis.LAGRANGE
+        )
+
         # Sanity check that witness fulfils gate constraints
         assert (
             self.A * self.pk.QL
@@ -106,11 +135,41 @@ class Prover:
         )
 
         # Return a_1, b_1, c_1
+        a_1 = setup.commit(self.A)
+        b_1 = setup.commit(self.B)
+        c_1 = setup.commit(self.C)
+
         return Message1(a_1, b_1, c_1)
 
     def round_2(self) -> Message2:
         group_order = self.group_order
         setup = self.setup
+
+        roots_of_unity = Scalar.roots_of_unity(group_order)
+
+        Z_values = [Scalar(1)]
+        for j in range(group_order):
+            numerator_1 = self.rlc(self.A.values[j], roots_of_unity[j])
+            numerator_2 = self.rlc(self.B.values[j], 2 * roots_of_unity[j])
+            numerator_3 = self.rlc(self.C.values[j], 3 * roots_of_unity[j])
+
+            assert self.pk.S1.basis == Basis.LAGRANGE
+            assert self.pk.S2.basis == Basis.LAGRANGE
+            assert self.pk.S3.basis == Basis.LAGRANGE
+
+            sigma_star_1 = self.pk.S1.values[j]
+            sigma_star_2 = self.pk.S2.values[j]
+            sigma_star_3 = self.pk.S3.values[j]
+
+            denominator_1 = self.rlc(self.A.values[j], sigma_star_1)
+            denominator_2 = self.rlc(self.B.values[j], sigma_star_2)
+            denominator_3 = self.rlc(self.C.values[j], sigma_star_3)
+
+            numerator = numerator_1 * numerator_2 * numerator_3
+            denominator = denominator_1 * denominator_2 * denominator_3
+
+            new_term = (numerator / denominator) * Z_values[-1]
+            Z_values.append(new_term)
 
         # Check that the last term Z_n = 1
         assert Z_values.pop() == 1
@@ -128,6 +187,13 @@ class Prover:
             ) * Z_values[
                 (i + 1) % group_order
             ] == 0
+
+        z_poly = Polynomial(
+            Z_values,
+            Basis.LAGRANGE
+        )
+
+        z_1 = setup.commit(z_poly)
 
         # Return z_1
         return Message2(z_1)
