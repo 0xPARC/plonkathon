@@ -153,11 +153,21 @@ class Polynomial:
     # This lets us work with higher-degree polynomials, and the offset lets us
     # avoid the 0/0 problem when computing a division (as long as the offset is
     # chosen randomly)
+    def return_new_with_offset(self, offset):
+        assert self.basis == Basis.MONOMIAL
+        return Polynomial(
+            [x * offset**i for i, x in enumerate(self.values)],
+            self.basis,
+        )
+
     def to_coset_extended_lagrange(self, offset):
-        assert self.basis == Basis.LAGRANGE
         group_order = len(self.values)
-        x_powers = self.ifft().values
-        x_powers = [(offset**i * x) for i, x in enumerate(x_powers)] + [Scalar(0)] * (
+        if self.basis == Basis.LAGRANGE:
+            x = self.ifft()
+        else:
+            x = self
+        x_powers = x.values
+        x_powers = x.return_new_with_offset(offset).values + [Scalar(0)] * (
             group_order * 3
         )
         return Polynomial(x_powers, Basis.MONOMIAL).fft()
@@ -193,3 +203,11 @@ class Polynomial:
                 ]
             )
         )
+
+    # Given a polynomial expressed as a list of evaluations at roots of unity,
+    # evaluate it at x directly, without using an FFT to covert to coeffs first
+    def eval(self, x: Scalar):
+        if self.basis == Basis.MONOMIAL:
+            return self.fft().barycentric_eval(x)
+        else:
+            return self.barycentric_eval(x)
