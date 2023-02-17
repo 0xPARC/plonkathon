@@ -73,18 +73,106 @@ class VerificationKey:
     # Basic, easier-to-understand version of what's going on
     def verify_proof_unoptimized(self, group_order: int, pf, public=[]) -> bool:
         # 4. Compute challenges
+        transcript = Transcript(b"plonk")
+        beta, gamma = transcript.round_1(pf.msg_1)
+        alpha = transcript.round_2(pf.msg_2)
+        zeta = transcript.round_3(pf.msg_3)
+        v = transcript.round_4(pf.msg_4)
+        u = transcript.round_5(pf.msg_5)
 
         # 5. Compute zero polynomial evaluation Z_H(ζ) = ζ^n - 1
+        z_h_eval = zeta ** group_order - 1 
 
-        # 6. Compute Lagrange polynomial evaluation L_0(ζ)
+        omega = Scalar.root_of_unity(group_order)
 
+        # TODO: there might be an issue here
+        # 6. Compute Lagrange polynomial evaluation L_0(ζ))
+        L_0_eval = omega * z_h_eval / (group_order * (zeta - omega))
+
+        # TODO: might be an issue here
         # 7. Compute public input polynomial evaluation PI(ζ).
+        PI = Polynomial(public, Basis.LAGRANGE)
+        PI_eval = PI.barycentric_eval(zeta)
 
+        # TODO: might be an issue here too 
         # Recover the commitment to the linearization polynomial R,
         # exactly the same as what was created by the prover
+        gate_constraints = ec_lincomb([
+            (self.Qm, pf.msg_4.a_eval * pf.msg_4.b_eval), 
+            (self.Ql, pf.msg_4.a_eval), 
+            (self.Qr, pf.msg_4.b_eval),
+            (self.Qo, pf.msg_4.c_eval),
+            (G1Point, PI_eval),
+            (self.Qc, Scalar(1))
+        ])
+
+        scalar_before_z = (pf.msg_4.a_eval + beta*zeta + gamma)*(pf.msg_4.b_eval + beta*Scalar(2)*zeta + gamma)*(pf.msg_4.c_eval + Scalar(3)*beta*zeta + gamma)
+        scalar_before_s3_rlc = Scalar(0) - (pf.msg_4.z_shifted_eval* (pf.msg_4.a_eval + beta* pf.msg_4.s1_eval + gamma) * (pf.msg_4.b_eval + beta * pf.msg_4.s2_eval + gamma)))
+        s3_rlc = ec_lincomb([
+            (G1Point, pf.msg_4.c_eval),
+            (self.S3, beta),
+            (G1Point, gamma)
+        ])
+
+        permutation_without_a = ec_lincomb([
+            (pf.msg_2.z_1, scalar_before_z),
+            (s3_rlc, scalar_before_s3_rlc)
+        ])
+
+        z_without_a2 = ec_lincomb([
+            (pf.msg_2.z_1, L_0_eval),
+            (G1Point, L_0_eval)
+        ])
+
+        quotient_without_zh = ec_lincomb([
+            (pf.msg_3.t_lo_1, Scalar(1)), 
+            (pf.msg_3.t_mid_1, zeta ** group_order),
+            (pf.msg_3.t_hi_1, zeta ** (Scalar(2) * group_order))
+        ])
+
+        lin_poly = ec_lincomb([
+            (gate_constraints, Scalar(1)),
+            (permutation_without_a, alpha),
+            (z_without_a2, alpha ** Scalar(2)), 
+            (quotient_without_zh, z_h_eval)
+
+        ])
 
         # Verify that R(z) = 0 and the prover-provided evaluations
         # A(z), B(z), C(z), S1(z), S2(z) are all correct
+
+        a_open = ec_lincomb([
+            (pf.msg_1.a_1, Scalar(1)), 
+            (G1Point, pf.msg_4.a_eval)
+        ])
+        b_open = ec_lincomb([
+            (pf.msg_1.b_1, Scalar(1)), 
+            (G1Point, pf.msg_4.b_eval)
+        ])
+        c_open = ec_lincomb([
+            (pf.msg_1.c_1, Scalar(1)), 
+            (G1Point, pf.msg_4.c_eval)
+        ])
+        s1_open = ec_lincomb([
+            (self.S1, Scalar(1)), 
+            (G1Point, pf.msg_4.s1_eval)
+        ])
+        s2_open = ec_lincomb([
+            (self.S2, Scalar(1)), 
+            (G1Point, pf.msg_4.a_s2_eval)
+        ])
+        # how to do rest of opening lmaoooo
+        opening = ec_lincomb([
+            (lin_poly, Scalar(1)), 
+            (a_open, v), 
+            (b_open, v **2), 
+            (c_open, v **3), 
+            (s1_open, v**4), 
+            (s2_open, v**5)
+        ]), (Scalar(1) / ())
+
+        
+        assert(pf.msg_5.W_z_1 == )
 
         # Verify that the provided value of Z(zeta*w) is correct
 
