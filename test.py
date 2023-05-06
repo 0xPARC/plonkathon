@@ -16,9 +16,9 @@ def setup_test():
 
     setup = Setup.from_file("test/powersOfTau28_hez_final_11.ptau")
     dummy_values = Polynomial(
-        list(map(Scalar, [1, 2, 3, 4, 5, 6, 7, 8])), Basis.LAGRANGE
+        list(map(Scalar, [1, 2, 3, 4, 5, 6, 7, 8])), Basis.LAGRANGE  #TODO(keep), 采用点值法表示，w =19540430494807482326159819597004422086093766032135589407132600596362845576832, 多项式点的坐标分别为 (w^0,1)，(w^1,2),(w^2,3),....(w^7,8)
     )
-    program = Program(["c <== a * b"], 8)
+    program = Program(["c <== a * b"], 8)  # 电路的阶=8
     commitment = setup.commit(dummy_values)
     assert commitment == G1Point(
         (
@@ -258,26 +258,53 @@ def poseidon_test(setup):
     assert vk.verify_proof(1024, proof, [1, 2, expected_value])
     print("Verified proof!")
 
+def root_of_unity_test():
+    for i in range(2,24):
+        order = 2 ** i
+        roots = Scalar(1).roots_of_unity(order)
+        val = roots[1] * roots[-1]
+        # print(f"{i}'s root of unity:{roots}\n", i, roots)
+        print(f"{i}'s roots[1] * roots[-1]={val}")
+
+def lincom_test():
+    numbers = [1,3]
+    factors = [1,2,4,8]
+    bitlens = [len(bin(f)) - 2 for f in factors]
+    maxbitlen = max(bitlens)
+
+    subsets = []
+    for j in range(maxbitlen + 1):
+        subset = set()  # 创建一个空的集合{}
+        for i in range(len(numbers)):
+            if factors[i] & (1 << j):
+                subset.add(i)
+        subsets.append(subset)
+        print(f"subset:{subset}")
+
+    print(f"subsets:{subsets}")
+
 
 if __name__ == "__main__":
+    # root_of_unity_test()
+    #lincom_test()
     # Step 1: Pass setup test
-    setup_test()
-
+    # setup_test()
+    #
     setup = basic_test()
-
-    # Step 2: Pass prover test using verifier we provide (DO NOT READ TEST VERIFIER CODE)
+    #
+    # # Step 2: Pass prover test using verifier we provide (DO NOT READ TEST VERIFIER CODE)
     prover_test_dummy_verifier(setup)
-
-    # Step 3: Pass verifier test using your own verifier
-    with open("test/proof.pickle", "rb") as f:
-        proof = pickle.load(f)
-    verifier_test_unoptimized(setup, proof)
-    verifier_test_full(setup, proof)
-
-    # Step 4: Pass end-to-end tests for prover and verifier
-    ab_plus_a_test(setup)
-    one_public_input_test(setup)
-    proof = prover_test(setup)
-    verifier_test_full(setup, proof)
-    factorization_test(setup)
-    poseidon_test(setup)
+    #
+    # # Step 3: Pass verifier test using your own verifier
+    # with open("test/proof.pickle", "rb") as f:
+    #     proof = pickle.load(f)
+    # verifier_test_unoptimized(setup, proof)
+    # verifier_test_full(setup, proof)
+    #
+    # # Step 4: Pass end-to-end tests for prover and verifier
+    # ab_plus_a_test(setup)
+    # one_public_input_test(setup)
+    # proof = prover_test(setup)
+    # verifier_test_full(setup, proof)
+    # factorization_test(setup)
+    # poseidon_test(setup)

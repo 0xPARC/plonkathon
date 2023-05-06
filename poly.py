@@ -117,8 +117,8 @@ class Polynomial:
         def _fft(vals, modulus, roots_of_unity):
             if len(vals) == 1:
                 return vals
-            L = _fft(vals[::2], modulus, roots_of_unity[::2])
-            R = _fft(vals[1::2], modulus, roots_of_unity[::2])
+            L = _fft(vals[::2], modulus, roots_of_unity[::2])  # 偶数次，
+            R = _fft(vals[1::2], modulus, roots_of_unity[::2]) # 奇数次
             o = [0] * len(vals)
             for i, (x, y) in enumerate(zip(L, R)):
                 y_times_root = y * roots_of_unity[i]
@@ -126,13 +126,18 @@ class Polynomial:
                 o[i + len(L)] = (x - y_times_root) % modulus
             return o
 
-        roots = [x.n for x in Scalar.roots_of_unity(len(self.values))]
+        # roots = Scalar.roots_of_unity(len(self.values))
+        # print(f"roots:{roots}")
+
+        roots = [x.n for x in Scalar.roots_of_unity(len(self.values))] #x是scalar,取x.n 赋值给roots
+        # print(f"roots:{roots}")
         o, nvals = Scalar.field_modulus, [x.n for x in self.values]
         if inv:
             assert self.basis == Basis.LAGRANGE
-            # Inverse FFT
+            # Inverse FFT， 使用IFFT将多项式从 点值表示变成系数表示。
             invlen = Scalar(1) / len(self.values)
-            reversed_roots = [roots[0]] + roots[1:][::-1]
+            reversed_roots = [roots[0]] + roots[1:][::-1]  # [1, w, w^2, w^7] =>[1, w^-1, w^-2,..... ], w^-1 = w^7
+            # print(f"roots:{reversed_roots}")
             return Polynomial(
                 [Scalar(x) * invlen for x in _fft(nvals, o, reversed_roots)],
                 Basis.MONOMIAL,

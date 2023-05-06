@@ -60,7 +60,7 @@ class Prover:
             + [Scalar(0) for _ in range(self.group_order - len(public_vars))],
             Basis.LAGRANGE,
         )
-        self.PI = PI
+        self.PI = PI  #PI = public input?
 
         # Round 1
         msg_1 = self.round_1(witness)
@@ -94,15 +94,32 @@ class Prover:
         if None not in witness:
             witness[None] = 0
 
+        A_values = [Scalar(0)] * group_order
+        B_values = [Scalar(0)] * group_order
+        C_values = [Scalar(0)] * group_order
+
+        wires = program.wires()
+
         # Compute wire assignments for A, B, C, corresponding:
         # - A_values: witness[program.wires()[i].L]
         # - B_values: witness[program.wires()[i].R]
         # - C_values: witness[program.wires()[i].O]
 
+        for i, gate in enumerate(wires):
+            A_values[i] = Scalar(witness[gate.L])
+            B_values[i] = Scalar(witness[gate.R])
+            C_values[i] = Scalar(witness[gate.O])
+
         # Construct A, B, C Lagrange interpolation polynomials for
         # A_values, B_values, C_values
+        self.A = Polynomial(A_values,  Basis.LAGRANGE)
+        self.B = Polynomial(B_values, Basis.LAGRANGE)
+        self.C = Polynomial(C_values,  Basis.LAGRANGE)
 
         # Compute a_1, b_1, c_1 commitments to A, B, C polynomials
+        a_1 = setup.commit(self.A)
+        b_1 = setup.commit(self.B)
+        c_1 = setup.commit(self.C)
 
         # Sanity check that witness fulfils gate constraints
         assert (
@@ -128,6 +145,20 @@ class Prover:
         # Note the convenience function:
         #       self.rlc(val1, val2) = val_1 + self.beta * val_2 + gamma
 
+        #TODO(keep), k1 = 2, k2 = 3
+        Z_values = [Scalar(0)] * (group_order + 1)               # 准备order+1个Z_Values
+        roots_of_unity = Scalar(0).roots_of_unity(group_order)
+        Z_values[0] = Scalar(1)
+
+        # 线性约束的递归多项式Z(x)
+        # Z(i+1) = Z(i) * [(a[i] + beta * w[i] + gamma) *(b[i] + k1 * beta * w[i] + gamma) *(c[i] + k2 * beta * w[i] + gamma)]/ [(a[i] + beta * S1.values[i] + gamma) *(b[i] + beta S2.values[i] + gamma) *(c[i] + beta * S3.values[i] + gamma)]
+        for i in range (group_order):
+            denominator = self.rlc(self.A.values[i], roots_of_unity[i]) * self.rlc(self.B.values[i], 2 * roots_of_unity[i]) * self.rlc(self.C.values[i], 3 * roots_of_unity[i])
+            numerator = self.rlc(self.A.values[i], self.pk.S1.values[i]) * self.rlc(self.B.values[i], self.pk.S2.values[i]) * self.rlc(self.C.values[i], self.pk.S3.values[i])
+            Z_values[i+1] = Z_values[i] * denominator / numerator
+
+        print(f"z_values:{Z_values}")
+
         # Check that the last term Z_n = 1
         assert Z_values.pop() == 1
 
@@ -145,8 +176,13 @@ class Prover:
                 (i + 1) % group_order
             ] == 0
 
+        print(f"z_values after pop:{Z_values}")
+
         # Construct Z, Lagrange interpolation polynomial for Z_values
+        self.Z = Polynomial(Z_values,  Basis.LAGRANGE)
+
         # Cpmpute z_1 commitment to Z polynomial
+        z_1 = setup.commit(self.Z)
 
         # Return z_1
         return Message2(z_1)

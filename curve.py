@@ -13,14 +13,16 @@ class Scalar(Field):
     # Gets the first root of unity of a given group order
     @classmethod
     def root_of_unity(cls, group_order: int):
-        return Scalar(5) ** ((cls.field_modulus - 1) // group_order)
+        val = Scalar(5) ** ((cls.field_modulus - 1) // group_order) # 对于order=2^k次方电路，该方式产生的单位方根都满足w * w^(order-1) = 1
+        return val
 
     # Gets the full list of roots of unity of a given group order
     @classmethod
     def roots_of_unity(cls, group_order: int):
         o = [Scalar(1), cls.root_of_unity(group_order)]
         while len(o) < group_order:
-            o.append(o[-1] * o[1])
+            val = o[-1] * o[1] #[1, w, w^2] => [1, w, w^2, w^3] w*w^2=w^3
+            o.append(val)
         return o
 
 
@@ -90,7 +92,9 @@ def multisubset(numbers, subsets, adder=lambda x, y: x + y, zero=0):
 # into a multi-subset problem, and computes the result efficiently
 def lincomb(numbers, factors, adder=lambda x, y: x + y, zero=0):
     # Maximum bit length of a number; how many subsets we need to make
-    maxbitlen = max(len(bin(f)) - 2 for f in factors)
+    bitlens = [len(bin(f)) - 2 for f in factors] #bin(31) = 0b1111,所以要-2
+
+    maxbitlen = max(bitlens)
     # Compute the subsets: the ith subset contains the numbers whose corresponding factor
     # has a 1 at the ith bit
     subsets = [
