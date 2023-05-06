@@ -122,15 +122,13 @@ class Prover:
         c_1 = setup.commit(self.C)
 
         # Sanity check that witness fulfils gate constraints
-        assert (
-            self.A * self.pk.QL
+        gate_contraints = ( self.A * self.pk.QL
             + self.B * self.pk.QR
             + self.A * self.B * self.pk.QM
             + self.C * self.pk.QO
             + self.PI
-            + self.pk.QC
-            == Polynomial([Scalar(0)] * group_order, Basis.LAGRANGE)
-        )
+            + self.pk.QC)
+        assert ( gate_contraints == Polynomial([Scalar(0)] * group_order, Basis.LAGRANGE))
 
         # Return a_1, b_1, c_1
         return Message1(a_1, b_1, c_1)
@@ -195,44 +193,76 @@ class Prover:
 
         # List of roots of unity at 4x fineness, i.e. the powers of µ
         # where µ^(4n) = 1
+        quarter_roots = Scalar(0).roots_of_unity(group_order*4)
 
         # Using self.fft_expand, move A, B, C into coset extended Lagrange basis
+        ex_A = self.fft_expand(self.A)
+        ex_B = self.fft_expand(self.B)
+        ex_C = self.fft_expand(self.C)
 
         # Expand public inputs polynomial PI into coset extended Lagrange
+        ex_PI = self.fft_expand(self.PI)
 
         # Expand selector polynomials pk.QL, pk.QR, pk.QM, pk.QO, pk.QC
         # into the coset extended Lagrange basis
+        ex_QL = self.fft_expand(self.pk.QL)
+        ex_QR = self.fft_expand(self.pk.QR)
+        ex_QM = self.fft_expand(self.pk.QM)
+        ex_QO = self.fft_expand(self.pk.QO)
+        ex_QC = self.fft_expand(self.pk.QC)
 
         # Expand permutation grand product polynomial Z into coset extended
         # Lagrange basis
+        ex_Z = self.fft_expand(self.Z)
 
         # Expand shifted Z(ω) into coset extended Lagrange basis
+        ex_Z_shifted = ex_Z.shift(4)
 
         # Expand permutation polynomials pk.S1, pk.S2, pk.S3 into coset
         # extended Lagrange basis
+        ex_S1 = self.fft_expand(self.pk.S1)
+        ex_S2 = self.fft_expand(self.pk.S2)
+        ex_S3 = self.fft_expand(self.pk.S3)
 
         # Compute Z_H = X^N - 1, also in evaluation form in the coset
+        ZH_values = [Scalar(0)] * group_order
+        self.ZH = Polynomial(ZH_values, Basis.LAGRANGE)
+        ex_ZH = self.fft_expand(self.ZH)
 
         # Compute L0, the Lagrange basis polynomial that evaluates to 1 at x = 1 = ω^0
         # and 0 at other roots of unity
+        L0 = Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE) #在w^0处为1， 其余的地方全部为0
 
         # Expand L0 into the coset extended Lagrange basis
-        L0_big = self.fft_expand(
-            Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE)
-        )
+        ex_L0_ = self.fft_expand(L0)
 
         # Compute the quotient polynomial (called T(x) in the paper)
         # It is only possible to construct this polynomial if the following
         # equations are true at all roots of unity {1, w ... w^(n-1)}:
         # 1. All gates are correct:
         #    A * QL + B * QR + A * B * QM + C * QO + PI + QC = 0
+        gate_constraints = (
+                ex_A * ex_QL
+                + ex_B * ex_QR
+                + ex_A * ex_B * ex_QM
+                + ex_C * ex_QO
+                + ex_PI
+                + ex_QC
+        )
+
+        print(f"gate constraints:{gate_constraints}")
+
         #
         # 2. The permutation accumulator is valid:
         #    Z(wx) = Z(x) * (rlc of A, X, 1) * (rlc of B, 2X, 1) *
         #                   (rlc of C, 3X, 1) / (rlc of A, S1, 1) /
         #                   (rlc of B, S2, 1) / (rlc of C, S3, 1)
         #    rlc = random linear combination: term_1 + beta * term2 + gamma * term3
-        #
+
+
+
+
+
         # 3. The permutation accumulator equals 1 at the start point
         #    (Z - 1) * L0 = 0
         #    L0 = Lagrange polynomial, equal at all roots of unity except 1
@@ -246,6 +276,7 @@ class Prover:
 
         # Split up T into T1, T2 and T3 (needed because T has degree 3n - 4, so is
         # too big for the trusted setup)
+
 
         # Sanity check that we've computed T1, T2, T3 correctly
         assert (
