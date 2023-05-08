@@ -241,7 +241,16 @@ def coset_extended_lagrange_test():
     coeff_coset_poly1 = lagrange_coset_poly.coset_extended_lagrange_to_coeffs(Scalar(3))
     print(f"coeff_coset_poly, offset =3:{coeff_coset_poly1.values}")
 
+def poly_sub_test():
+    poly = Polynomial(list(map(Scalar, [1,2,1])),Basis.MONOMIAL)
+    poly1 = Polynomial(list(map(Scalar, [1,1,0])),Basis.MONOMIAL)
+
+    res = poly.fft()/poly1.fft()
+    print(f"res:{res.ifft().values}")
+
+
 
 
 if __name__ == "__main__":
-    coset_extended_lagrange_test()
+    #coset_extended_lagrange_test()
+    poly_sub_test()

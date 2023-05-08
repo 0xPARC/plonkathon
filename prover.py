@@ -193,7 +193,7 @@ class Prover:
 
         # List of roots of unity at 4x fineness, i.e. the powers of µ
         # where µ^(4n) = 1
-        quarter_roots = Scalar(0).roots_of_unity(group_order*4)
+        quarter_roots = Scalar.roots_of_unity(group_order*4)
 
         # Using self.fft_expand, move A, B, C into coset extended Lagrange basis
         A_big = self.fft_expand(self.A)
@@ -237,7 +237,6 @@ class Prover:
         #     val = val + [((Scalar(r) * 1) ** group_order)]
         #
         # print(f"val:{val}")
-
         ZH_big = Polynomial(
             [
                 ((Scalar(r) * self.fft_cofactor) ** group_order - 1)
@@ -263,12 +262,13 @@ class Prover:
         L0_big = self.fft_expand(L0)
 
         fft_cofactor = self.fft_cofactor
+        alpha = self.alpha
         # Compute the quotient polynomial (called T(x) in the paper)
         # It is only possible to construct this polynomial if the following
         # equations are true at all roots of unity {1, w ... w^(n-1)}:
         # 1. All gates are correct:
         #    A * QL + B * QR + A * B * QM + C * QO + PI + QC = 0,
-        gate_constraints = lambda: (
+        gate_constraints =  (
                 A_big * QL_big
                 + B_big * QR_big
                 + A_big * B_big * QM_big
@@ -277,43 +277,49 @@ class Prover:
                 + QC_big
         )
 
-        print(f"gate constraints:{gate_constraints}")
+        print(f"gate constraints:{gate_constraints.values}")
         #
         # 2. The permutation accumulator is valid:
         #    Z(wx) = Z(x) * (rlc of A, X, 1) * (rlc of B, 2X, 1) *
         #                   (rlc of C, 3X, 1) / (rlc of A, S1, 1) /
         #                   (rlc of B, S2, 1) / (rlc of C, S3, 1)
         #    rlc = random linear combination: term_1 + beta * term2 + gamma * term3
-        permutation_contstraints = lambda :(self.rlc(A_big, quarter_roots * fft_cofactor)
-                * self.rlc(B_big, 2 * quarter_roots * fft_cofactor)
-                * self.rlc(C_big , 3 * quarter_roots * fft_cofactor)
-            ) * ZH_big - (
+        quarter_roots_poly = Polynomial(quarter_roots, Basis.LAGRANGE)
+        print(f"quarter_roots_poly:{quarter_roots_poly}")
+
+
+        permutation_contstraints = (
+                self.rlc(A_big,  quarter_roots_poly* fft_cofactor)
+                * self.rlc(B_big,  quarter_roots_poly * (2 * fft_cofactor))
+                * self.rlc(C_big , quarter_roots_poly * (3 * fft_cofactor))
+            ) * Z_big - (
                 self.rlc(A_big, S1_big)
                 * self.rlc(B_big, S2_big)
                 * self.rlc(C_big, S3_big)
             ) * Z_shifted_big
 
 
-
         # 3. The permutation accumulator equals 1 at the start point
         #    (Z - 1) * L0 = 0
         #    L0 = Lagrange polynomial, equal at all roots of unity except 1
-        permutation_first_low = lambda: (Z_big - Scalar(1)) * L0_big
+        permutation_first_low = (Z_big - Scalar(1)) * L0_big
 
-        QUOT_big = ( gate_constraints() + permutation_contstraints() * alpha + permutation_first_low() * alpha ** 2) / ZH_big
+        QUOT_big = (gate_constraints + permutation_contstraints * alpha + permutation_first_low * alpha ** 2) / ZH_big
         print(f"QUOT_big:{QUOT_big}")
 
         # Sanity check: QUOT has degree < 3n
         assert (
-            self.expanded_evals_to_coeffs(QUOT_big).values[-group_order:]
+            self.expanded_evals_to_coeffs(QUOT_big).values[-group_order:]  #使用不超过3 * group_order
             == [0] * group_order
         )
         print("Generated the quotient polynomial")
 
         # Split up T into T1, T2 and T3 (needed because T has degree 3n - 4, so is
         # too big for the trusted setup)
-
-
+        coeffs = self.expanded_evals_to_coeffs(QUOT_big).values
+        T1 = Polynomial(coeffs[:group_order], Basis.MONOMIAL).fft()
+        T2 = Polynomial(coeffs[group_order:2*group_order], Basis.MONOMIAL).fft()
+        T3 = Polynomial(coeffs[2* group_order:3 * group_order], Basis.MONOMIAL).fft()
 
         # Sanity check that we've computed T1, T2, T3 correctly
         assert (
@@ -326,6 +332,14 @@ class Prover:
 
         # Compute commitments t_lo_1, t_mid_1, t_hi_1 to T1, T2, T3 polynomials
         # Return t_lo_1, t_mid_1, t_hi_1
+        t_lo_1 = setup.commit(T1)
+        t_mid_1 = setup.commit(T2)
+        t_hi_1 = setup.commit(T3)
+
+        self.T1 = T1
+        self.T2 = T2
+        self.T3 = T3
+
         return Message3(t_lo_1, t_mid_1, t_hi_1)
 
     def round_4(self) -> Message4:
