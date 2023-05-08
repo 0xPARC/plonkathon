@@ -13,6 +13,7 @@ class Scalar(Field):
     # Gets the first root of unity of a given group order
     @classmethod
     def root_of_unity(cls, group_order: int):
+        # field_modulus = 21888242871839275222246405745257275088548364400416034343698204186575808495617
         val = Scalar(5) ** ((cls.field_modulus - 1) // group_order) # 对于order=2^k次方电路，该方式产生的单位方根都满足w * w^(order-1) = 1
         return val
 

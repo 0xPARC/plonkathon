@@ -153,7 +153,6 @@ class Polynomial:
         return self.fft(True)
 
     # 将在[1, w, w^2... w^(n-1)]的一系列点值形式转换成[offset, offset*q]
-    # step1: 将多项式的点值形式住那
     # Converts a list of evaluations at [1, w, w**2... w**(n-1)] to
     # a list of evaluations at
     # [offset, offset * q, offset * q**2 ... offset * q**(4n-1)] where q = w**(1/4)
@@ -167,7 +166,7 @@ class Polynomial:
         x_powers = [(offset**i * x) for i, x in enumerate(x_powers)] + [Scalar(0)] * (
             group_order * 3
         ) # step2: 将多项式表示为f'(x) = a_0 + (a_1*offset) *x + (a_2*offsset^2)*x^2 + (a_3*offsset^3)*x^3 + ... + +a_[order-1]*x^(order-1) + 0*x^(order) +....+ 0*x^(4*order-1)
-        return Polynomial(x_powers, Basis.MONOMIAL).fft()
+        return Polynomial(x_powers, Basis.MONOMIAL).fft()  # 最后还是用点值形式表示
 
 
     def to_coset_extended_lagrange1(self, offset):

@@ -60,7 +60,7 @@ class Prover:
             + [Scalar(0) for _ in range(self.group_order - len(public_vars))],
             Basis.LAGRANGE,
         )
-        self.PI = PI  #PI = public input?
+        self.PI = PI  #PI = public input
 
         # Round 1
         msg_1 = self.round_1(witness)
@@ -196,76 +196,112 @@ class Prover:
         quarter_roots = Scalar(0).roots_of_unity(group_order*4)
 
         # Using self.fft_expand, move A, B, C into coset extended Lagrange basis
-        ex_A = self.fft_expand(self.A)
-        ex_B = self.fft_expand(self.B)
-        ex_C = self.fft_expand(self.C)
+        A_big = self.fft_expand(self.A)
+        B_big = self.fft_expand(self.B)
+        C_big = self.fft_expand(self.C)
 
         # Expand public inputs polynomial PI into coset extended Lagrange
-        ex_PI = self.fft_expand(self.PI)
+        PI_big = self.fft_expand(self.PI)
 
         # Expand selector polynomials pk.QL, pk.QR, pk.QM, pk.QO, pk.QC
         # into the coset extended Lagrange basis
-        ex_QL = self.fft_expand(self.pk.QL)
-        ex_QR = self.fft_expand(self.pk.QR)
-        ex_QM = self.fft_expand(self.pk.QM)
-        ex_QO = self.fft_expand(self.pk.QO)
-        ex_QC = self.fft_expand(self.pk.QC)
+        QL_big = self.fft_expand(self.pk.QL)
+        QR_big = self.fft_expand(self.pk.QR)
+        QM_big = self.fft_expand(self.pk.QM)
+        QO_big = self.fft_expand(self.pk.QO)
+        QC_big = self.fft_expand(self.pk.QC)
 
         # Expand permutation grand product polynomial Z into coset extended
         # Lagrange basis
-        ex_Z = self.fft_expand(self.Z)
+        Z_big = self.fft_expand(self.Z)
+        print(f"Z_big:{Z_big.values}")
 
         # Expand shifted Z(ω) into coset extended Lagrange basis
-        ex_Z_shifted = ex_Z.shift(4)
+        # 在n root-of-unity上 z(Xw)相当于Z(X) 循环右移1位， 换到4n root-of-unity上就是 Z(X)循环右移四位得到Z(Xw)
+        Z_shifted_big = Z_big.shift(4)
+
 
         # Expand permutation polynomials pk.S1, pk.S2, pk.S3 into coset
         # extended Lagrange basis
-        ex_S1 = self.fft_expand(self.pk.S1)
-        ex_S2 = self.fft_expand(self.pk.S2)
-        ex_S3 = self.fft_expand(self.pk.S3)
+        S1_big = self.fft_expand(self.pk.S1)
+        S2_big = self.fft_expand(self.pk.S2)
+        S3_big = self.fft_expand(self.pk.S3)
 
         # Compute Z_H = X^N - 1, also in evaluation form in the coset
-        ZH_values = [Scalar(0)] * group_order
-        self.ZH = Polynomial(ZH_values, Basis.LAGRANGE)
-        ex_ZH = self.fft_expand(self.ZH)
+        # 点值形式表示的coset 扩展方法
+
+        # 用w_32_i，来表示ground_order = 4x8 的 第i个w, 则val的值是[w_32_0, w_32_8, w_32_16, w_32_24, w_32_0,......]
+        # val:[1, 21888242871839275217838484774961031246007050428528088939761107053157389710902, 21888242871839275222246405745257275088548364400416034343698204186575808495616, 4407920970296243842541313971887945403937097133418418784715, 1, 21888242871839275217838484774961031246007050428528088939761107053157389710902, 21888242871839275222246405745257275088548364400416034343698204186575808495616, 4407920970296243842541313971887945403937097133418418784715, 1, 21888242871839275217838484774961031246007050428528088939761107053157389710902, 21888242871839275222246405745257275088548364400416034343698204186575808495616, 4407920970296243842541313971887945403937097133418418784715, 1, 21888242871839275217838484774961031246007050428528088939761107053157389710902, 21888242871839275222246405745257275088548364400416034343698204186575808495616, 4407920970296243842541313971887945403937097133418418784715, 1, 21888242871839275217838484774961031246007050428528088939761107053157389710902, 21888242871839275222246405745257275088548364400416034343698204186575808495616, 4407920970296243842541313971887945403937097133418418784715, 1, 21888242871839275217838484774961031246007050428528088939761107053157389710902, 21888242871839275222246405745257275088548364400416034343698204186575808495616, 4407920970296243842541313971887945403937097133418418784715, 1, 21888242871839275217838484774961031246007050428528088939761107053157389710902, 21888242871839275222246405745257275088548364400416034343698204186575808495616, 4407920970296243842541313971887945403937097133418418784715, 1, 21888242871839275217838484774961031246007050428528088939761107053157389710902, 21888242871839275222246405745257275088548364400416034343698204186575808495616, 4407920970296243842541313971887945403937097133418418784715]
+        # val = []
+        # for r in quarter_roots:
+        #     val = val + [((Scalar(r) * 1) ** group_order)]
+        #
+        # print(f"val:{val}")
+
+        ZH_big = Polynomial(
+            [
+                ((Scalar(r) * self.fft_cofactor) ** group_order - 1)
+                for r in quarter_roots
+            ],
+            Basis.LAGRANGE,
+        )
+        # ZH_big:[10555632090856762420326882847893243614806512971877700564250452539433530666905, 12568874522361247563306689428466362806053021808013123783916208712770621909962, 11332610780982512801919522897364031473741851428538333779447751647142277828710, 9319368349478027658939716316790912282495342592402910559781995473805186585653, 10555632090856762420326882847893243614806512971877700564250452539433530666905, 12568874522361247563306689428466362806053021808013123783916208712770621909962, 11332610780982512801919522897364031473741851428538333779447751647142277828710, 9319368349478027658939716316790912282495342592402910559781995473805186585653, 10555632090856762420326882847893243614806512971877700564250452539433530666905, 12568874522361247563306689428466362806053021808013123783916208712770621909962, 11332610780982512801919522897364031473741851428538333779447751647142277828710, 9319368349478027658939716316790912282495342592402910559781995473805186585653, 10555632090856762420326882847893243614806512971877700564250452539433530666905, 12568874522361247563306689428466362806053021808013123783916208712770621909962, 11332610780982512801919522897364031473741851428538333779447751647142277828710, 9319368349478027658939716316790912282495342592402910559781995473805186585653, 10555632090856762420326882847893243614806512971877700564250452539433530666905, 12568874522361247563306689428466362806053021808013123783916208712770621909962, 11332610780982512801919522897364031473741851428538333779447751647142277828710, 9319368349478027658939716316790912282495342592402910559781995473805186585653, 10555632090856762420326882847893243614806512971877700564250452539433530666905, 12568874522361247563306689428466362806053021808013123783916208712770621909962, 11332610780982512801919522897364031473741851428538333779447751647142277828710, 9319368349478027658939716316790912282495342592402910559781995473805186585653, 10555632090856762420326882847893243614806512971877700564250452539433530666905, 12568874522361247563306689428466362806053021808013123783916208712770621909962, 11332610780982512801919522897364031473741851428538333779447751647142277828710, 9319368349478027658939716316790912282495342592402910559781995473805186585653, 10555632090856762420326882847893243614806512971877700564250452539433530666905, 12568874522361247563306689428466362806053021808013123783916208712770621909962, 11332610780982512801919522897364031473741851428538333779447751647142277828710, 9319368349478027658939716316790912282495342592402910559781995473805186585653]
+        print(f"ZH_big:{ZH_big.values}")
+
+        # 采用下面这种方法去扩展，得到的结果全部是0
+        # ZH1 = Polynomial([Scalar(0)] * (group_order), Basis.LAGRANGE)
+        # ZH1_big = self.fft_expand(ZH1)
+        # # ZH1_big:[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        # print(f"ZH1_big:{ZH1_big.values}")
+
 
         # Compute L0, the Lagrange basis polynomial that evaluates to 1 at x = 1 = ω^0
         # and 0 at other roots of unity
         L0 = Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE) #在w^0处为1， 其余的地方全部为0
 
         # Expand L0 into the coset extended Lagrange basis
-        ex_L0_ = self.fft_expand(L0)
+        L0_big = self.fft_expand(L0)
 
+        fft_cofactor = self.fft_cofactor
         # Compute the quotient polynomial (called T(x) in the paper)
         # It is only possible to construct this polynomial if the following
         # equations are true at all roots of unity {1, w ... w^(n-1)}:
         # 1. All gates are correct:
-        #    A * QL + B * QR + A * B * QM + C * QO + PI + QC = 0
-        gate_constraints = (
-                ex_A * ex_QL
-                + ex_B * ex_QR
-                + ex_A * ex_B * ex_QM
-                + ex_C * ex_QO
-                + ex_PI
-                + ex_QC
+        #    A * QL + B * QR + A * B * QM + C * QO + PI + QC = 0,
+        gate_constraints = lambda: (
+                A_big * QL_big
+                + B_big * QR_big
+                + A_big * B_big * QM_big
+                + C_big * QO_big
+                + PI_big
+                + QC_big
         )
 
         print(f"gate constraints:{gate_constraints}")
-
         #
         # 2. The permutation accumulator is valid:
         #    Z(wx) = Z(x) * (rlc of A, X, 1) * (rlc of B, 2X, 1) *
         #                   (rlc of C, 3X, 1) / (rlc of A, S1, 1) /
         #                   (rlc of B, S2, 1) / (rlc of C, S3, 1)
         #    rlc = random linear combination: term_1 + beta * term2 + gamma * term3
-
-
+        permutation_contstraints = lambda :(self.rlc(A_big, quarter_roots * fft_cofactor)
+                * self.rlc(B_big, 2 * quarter_roots * fft_cofactor)
+                * self.rlc(C_big , 3 * quarter_roots * fft_cofactor)
+            ) * ZH_big - (
+                self.rlc(A_big, S1_big)
+                * self.rlc(B_big, S2_big)
+                * self.rlc(C_big, S3_big)
+            ) * Z_shifted_big
 
 
 
         # 3. The permutation accumulator equals 1 at the start point
         #    (Z - 1) * L0 = 0
         #    L0 = Lagrange polynomial, equal at all roots of unity except 1
+        permutation_first_low = lambda: (Z_big - Scalar(1)) * L0_big
+
+        QUOT_big = ( gate_constraints() + permutation_contstraints() * alpha + permutation_first_low() * alpha ** 2) / ZH_big
+        print(f"QUOT_big:{QUOT_big}")
 
         # Sanity check: QUOT has degree < 3n
         assert (
@@ -278,6 +314,7 @@ class Prover:
         # too big for the trusted setup)
 
 
+
         # Sanity check that we've computed T1, T2, T3 correctly
         assert (
             T1.barycentric_eval(fft_cofactor)
@@ -288,7 +325,6 @@ class Prover:
         print("Generated T1, T2, T3 polynomials")
 
         # Compute commitments t_lo_1, t_mid_1, t_hi_1 to T1, T2, T3 polynomials
-
         # Return t_lo_1, t_mid_1, t_hi_1
         return Message3(t_lo_1, t_mid_1, t_hi_1)
 
