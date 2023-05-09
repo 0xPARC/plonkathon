@@ -344,6 +344,9 @@ class Prover:
 
     def round_4(self) -> Message4:
         # Compute evaluations to be used in constructing the linearization polynomial.
+        group_order = self.group_order
+        zeta = self.zeta
+        root_of_unity = Scalar.root_of_unity(group_order * 4)
 
         # Compute a_eval = A(zeta)
         # Compute b_eval = B(zeta)
@@ -351,6 +354,20 @@ class Prover:
         # Compute s1_eval = pk.S1(zeta)
         # Compute s2_eval = pk.S2(zeta)
         # Compute z_shifted_eval = Z(zeta * ω)
+
+        a_eval = self.A.barycentric_eval(zeta)
+        b_eval = self.B.barycentric_eval(zeta)
+        c_eval = self.C.barycentric_eval(zeta)
+        s1_eval = self.pk.S1.barycentric_eval(zeta)
+        s2_eval = self.pk.S2.barycentric_eval(zeta)
+        z_shifted_eval = self.Z.barycentric_eval(zeta * root_of_unity)
+
+        self.a_eval = a_eval
+        self.b_eval = b_eval
+        self.c_eval = c_eval
+        self.s1_eval = s1_eval
+        self.s2_eval = s2_eval
+        self.z_shifted_eval = z_shifted_eval
 
         # Return a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval
         return Message4(a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval)
