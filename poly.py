@@ -165,8 +165,8 @@ class Polynomial:
         x_powers = self.ifft().values  # step1: 将多项式的点值形式通过ifft 转换成系数形式(f(x) = a_0+ a_1*x + a_2*x^2 + a_3*x^3 + ...+a_[order-1]*x^(order-1)
         x_powers = [(offset**i * x) for i, x in enumerate(x_powers)] + [Scalar(0)] * (
             group_order * 3
-        ) # step2: 将多项式表示为f'(x) = a_0 + (a_1*offset) *x + (a_2*offsset^2)*x^2 + (a_3*offsset^3)*x^3 + ... + +a_[order-1]*x^(order-1) + 0*x^(order) +....+ 0*x^(4*order-1)
-        return Polynomial(x_powers, Basis.MONOMIAL).fft()  # 最后还是用点值形式表示
+        ) # step2: 将多项式表示为f'(x) = a_0 + (a_1*offset) *x + (a_2*offsset^2)*x^2 + (a_3*offsset^3)*x^3 + ... +(a_[order-1] * offset^order-1)  *x^(order-1) + 0*x^(order) +....+ 0*x^(4*order-1)
+        return Polynomial(x_powers, Basis.MONOMIAL).fft()  # 返回的结果用点值形式表示
 
 
     def to_coset_extended_lagrange1(self, offset):
@@ -219,9 +219,9 @@ class Polynomial:
 
 def coset_extended_lagrange_test():
     lagrange_poly = Polynomial(
-        list(map(Scalar, [1, 2, 3, 4, 5, 6, 7, 8])), Basis.LAGRANGE
         # TODO(keep), 采用点值法表示，w =19540430494807482326159819597004422086093766032135589407132600596362845576832, 多项式点的坐标分别为 (w^0,1)，(w^1,2),(w^2,3),....(w^7,8)
-    )
+        list(map(Scalar, [1, 2, 3, 4, 5, 6, 7, 8])), Basis.LAGRANGE
+         )
     #原始多项式的点值表示:[1, 2, 3, 4, 5, 6, 7, 8]
     print(f"original lagrange poly:{lagrange_poly.values}")
 
@@ -242,15 +242,33 @@ def coset_extended_lagrange_test():
     print(f"coeff_coset_poly, offset =3:{coeff_coset_poly1.values}")
 
 def poly_sub_test():
-    poly = Polynomial(list(map(Scalar, [1,2,1])),Basis.MONOMIAL)
-    poly1 = Polynomial(list(map(Scalar, [1,1,0])),Basis.MONOMIAL)
+    # f(x)= x^2+1, g(x)= x^2
+    F = Polynomial(list(map(Scalar, [1,0,1])),Basis.MONOMIAL)
+    G = Polynomial(list(map(Scalar, [0,0,1])),Basis.MONOMIAL)
 
-    res = poly.fft()/poly1.fft()
-    print(f"res:{res.ifft().values}")
+    FMinusOne = F- Scalar(1)  ## 系数形式，直接f(x)-1
+    assert G == FMinusOne
 
+def poly_mul_test():
+    # order 至少为f(x)*g(x)的最高次+1 向上取最近的2^k,例如f(x)*g(x)= x^4+x^2, order就至少=8， 当然等于16也是可以的。
+    # 如果order != 2^k, 得到的结果不正确，怀疑和FFT要是2^k有关。
+    # f(x)= x^2+1, g(x)= x^2
+    F = Polynomial(list(map(Scalar, [1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0])),Basis.MONOMIAL)
+    G = Polynomial(list(map(Scalar, [0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0])),Basis.MONOMIAL)
 
+    # 先转换为点值形式
+    F_eval = F.fft()
+    G_eval = G.fft()
+
+    # 点值相乘
+    FG_eval = F_eval * G_eval
+    FG= FG_eval.ifft()
+
+    #FG:[0, 0, 1, 0, 1, 0, 0, 0]
+    print(f"FG:{FG.values}")
 
 
 if __name__ == "__main__":
     #coset_extended_lagrange_test()
-    poly_sub_test()
+    #poly_sub_test()
+    poly_mul_test()
