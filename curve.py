@@ -38,10 +38,11 @@ def ec_mul(pt, coeff):
 
 # Elliptic curve linear combination. A truly optimized implementation
 # would replace this with a fast lin-comb algo, see https://ethresear.ch/t/7238
+#https://ethresear.ch/t/simple-guide-to-fast-linear-combinations-aka-multiexponentiations/7238
 def ec_lincomb(pairs):
     return lincomb(
-        [pt for (pt, _) in pairs],
-        [int(n) % b.curve_order for (_, n) in pairs],
+        [pt for (pt, _) in pairs],  #numbers
+        [int(n) % b.curve_order for (_, n) in pairs], # 1，s*G，s^2*G, s^3 *G
         b.add,
         b.Z1,
     )
@@ -152,6 +153,7 @@ def test_lincomb(numcount, bitlength=256):
         "Optimization factor: %.2f"
         % ((bitlength * numcount + total_ones) / (bitlength * 2 + counter[0]))
     )
+
 
 
 if __name__ == "__main__":

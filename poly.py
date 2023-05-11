@@ -200,9 +200,9 @@ class Polynomial:
 
     # Given a polynomial expressed as a list of evaluations at roots of unity,
     # evaluate it at x directly, without using an FFT to covert to coeffs first
+    # 用重心插值法求出多项式的值，
     def barycentric_eval(self, x: Scalar):
         assert self.basis == Basis.LAGRANGE
-
         order = len(self.values)
         roots_of_unity = Scalar.roots_of_unity(order)
         return (
@@ -268,7 +268,41 @@ def poly_mul_test():
     print(f"FG:{FG.values}")
 
 
+def lagrange_poly_eval_test():
+    # f(x)= x^2+1
+    F = Polynomial(list(map(Scalar, [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])), Basis.MONOMIAL)
+    F_eval = F.fft()
+
+    y_2 = F_eval.barycentric_eval(2)
+    print(f"y_2:{y_2}")
+
+def fast_linear_combination_test():
+    numbers = [5,11,6,15,12]
+    factors = [1,2,4,8,16]
+    print(f"numbers:{numbers}")
+    bitlens = [len(bin(f)) - 2 for f in factors]  # bin(31) = 0b1111,所以要-2
+    maxbitlen = max(bitlens)
+    print(f"maxbitlen:{maxbitlen}")
+
+    subsets = []
+    for j in range(maxbitlen + 1):
+        subset = set()
+        for i in range(len(numbers)):
+            if numbers[i] & (1 << j):
+                subset.add(i)
+        subsets.append(subset)
+    print(f"subsets:{subsets}")
+
+    subsets1 = [
+        {i for i in range(len(numbers)) if numbers[i] & (1 << j)}
+        for j in range(maxbitlen + 1)
+    ]
+    print(f"subsets1:{subsets1}")
+
+
 if __name__ == "__main__":
     #coset_extended_lagrange_test()
     #poly_sub_test()
-    poly_mul_test()
+    # poly_mul_test()
+    # lagrange_poly_eval_test()
+    fast_linear_combination_test()

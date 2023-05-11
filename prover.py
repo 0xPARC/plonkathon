@@ -217,7 +217,7 @@ class Prover:
         print(f"Z_big:{Z_big.values}")
 
         # Expand shifted Z(ω) into coset extended Lagrange basis
-        # 在n root-of-unity上 z(Xw)相当于Z(X) 循环右移1位， 换到4n root-of-unity上就是 Z(X)循环右移四位得到Z(Xw)
+        # 在n root-of-unity上  z(ωx)相当于Z(x) 循环右移1位， 换到4n root-of-unity上就是 z(ωx)相当于Z(x)循环右移4位
         Z_shifted_big = Z_big.shift(4)
 
 
@@ -239,6 +239,7 @@ class Prover:
         #方式1：
         ZH_coeffs =[0] * (4 *group_order) # ZH_big 的阶数 = 4 * ground_order
         ZH_coeffs[0] = -1  # 常数项 = -1
+        # [-1,0,0,...,(offset^group_order),0,0... ]
         ZH_coeffs[group_order] = self.fft_cofactor ** group_order #第group_order项系数= (offset^group_order)
 
         ZH_poly = Polynomial(list(map(Scalar, ZH_coeffs)), Basis.MONOMIAL)
@@ -253,11 +254,11 @@ class Prover:
             Basis.LAGRANGE,
         )
 
-        assert ZH_big == ZH_big1 #验证是否等价。
+        assert ZH_big == ZH_big1 #验证ZH两种扩展方式是否等价。
 
         # Compute L0, the Lagrange basis polynomial that evaluates to 1 at x = 1 = ω^0
         # and 0 at other roots of unity
-        L0 = Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE) #在w^0处为1， 其余的地方全部为0
+        L0 = Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE)  #在w^0处为1， 其余的地方全部为0
 
         # Expand L0 into the coset extended Lagrange basis
         L0_big = self.fft_expand(L0)
@@ -269,6 +270,7 @@ class Prover:
         # equations are true at all roots of unity {1, w ... w^(n-1)}:
         # 1. All gates are correct:
         #    A * QL + B * QR + A * B * QM + C * QO + PI + QC = 0,
+        # 计算陪集中的门约束
         gate_constraints =  (
                 A_big * QL_big
                 + B_big * QR_big
@@ -285,10 +287,9 @@ class Prover:
         #    rlc = random linear combination: term_1 + beta * term2 + gamma * term3
         quarter_roots_poly = Polynomial(quarter_roots, Basis.LAGRANGE)
 
-
         #TODO(keep), 计算陪集中的置换约束
         permutation_contstraints = (
-                self.rlc(A_big,  quarter_roots_poly* fft_cofactor)
+            self.rlc(A_big,  quarter_roots_poly* fft_cofactor)
                 * self.rlc(B_big,  quarter_roots_poly * (2 * fft_cofactor))
                 * self.rlc(C_big , quarter_roots_poly * (3 * fft_cofactor))
             ) * Z_big - (
@@ -304,7 +305,7 @@ class Prover:
         # TODO(keep), 注意点值多项式 Z_big - Scalar(1) 所有的点的值都要减1，相当于函数图像整体下移1。
         permutation_first_low = (Z_big - Scalar(1)) * L0_big
 
-        # TODO(keep),此处交换 permutation_first_low 和 permutation_contstraints 不影响结果。
+        # TODO(keep),计算商多项式此处交换 permutation_first_low 和 permutation_contstraints 不影响结果。
         QUOT_big = (gate_constraints + permutation_contstraints * alpha + permutation_first_low * alpha ** 2) / ZH_big
         #QUOT_big = (gate_constraints + permutation_first_low * alpha + permutation_contstraints * alpha ** 2) / ZH_big
         print(f"QUOT_big:{QUOT_big.values}")
@@ -318,13 +319,14 @@ class Prover:
 
         # Split up T into T1, T2 and T3 (needed because T has degree 3n - 4, so is
         # too big for the trusted setup)
+        # TODO(keep),转换为系数表示，并拆分出T1/T2/T3
         coeffs = self.expanded_evals_to_coeffs(QUOT_big).values
         T1 = Polynomial(coeffs[:group_order], Basis.MONOMIAL).fft()
         T2 = Polynomial(coeffs[group_order:2*group_order], Basis.MONOMIAL).fft()
         T3 = Polynomial(coeffs[2* group_order:3 * group_order], Basis.MONOMIAL).fft()
 
         # Sanity check that we've computed T1, T2, T3 correctly
-        # TODO(keep), QUOT_big.values[0] 对应的x坐标是w^0 = 1, 所以对应到coset的x坐标就是 (offset * 1)
+        # TODO(keep), 验证商多项式的计算是否正确,QUOT_big.values[0] 对应的x坐标是w^0 = 1, 所以对应到coset的x坐标就是 (offset * 1)
         assert (
             T1.barycentric_eval(fft_cofactor)
             + T2.barycentric_eval(fft_cofactor) * fft_cofactor**group_order
@@ -332,16 +334,16 @@ class Prover:
         ) == QUOT_big.values[0]
 
 
-        # root_of_unity = Scalar.root_of_unity(group_order)
-        # w_in_coset =  fft_cofactor * root_of_unity
-        #
-        # T = (
-        #     T1.barycentric_eval(w_in_coset)
-        #     + T2.barycentric_eval(w_in_coset) * fft_cofactor ** group_order
-        #     + T3.barycentric_eval(w_in_coset) * fft_cofactor ** (group_order * 2)
-        # )
-        # print(f"T:{T}")
-        # print(f"QUO_big.values[1]:{QUOT_big.values[0]}")
+        root_of_unity = Scalar.root_of_unity(group_order)
+        w_in_coset =  fft_cofactor * root_of_unity
+
+        T = (
+            T1.barycentric_eval(w_in_coset)
+            + T2.barycentric_eval(w_in_coset) * fft_cofactor ** group_order
+            + T3.barycentric_eval(w_in_coset) * fft_cofactor ** (group_order * 2)
+        )
+        print(f"T:{T}")
+        print(f"QUO_big.values[1]:{QUOT_big.values[1]}")
 
         print("Generated T1, T2, T3 polynomials")
 
@@ -357,6 +359,7 @@ class Prover:
 
         return Message3(t_lo_1, t_mid_1, t_hi_1)
 
+    # TODO(keep)，round4, 在zeta 点 打开a(x), b(x), c(x), s1(x), s2(x), z(ωx)
     def round_4(self) -> Message4:
         # Compute evaluations to be used in constructing the linearization polynomial.
         group_order = self.group_order
@@ -369,7 +372,7 @@ class Prover:
         # Compute s1_eval = pk.S1(zeta)
         # Compute s2_eval = pk.S2(zeta)
         # Compute z_shifted_eval = Z(zeta * ω)
-        # TODO(keep)，打开
+
         a_eval = self.A.barycentric_eval(zeta)
         b_eval = self.B.barycentric_eval(zeta)
         c_eval = self.C.barycentric_eval(zeta)
@@ -387,6 +390,7 @@ class Prover:
         # Return a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval
         return Message4(a_eval, b_eval, c_eval, s1_eval, s2_eval, z_shifted_eval)
 
+    # TODO(keep)，round5, 计算r(x)，并提交r(x)，a(x), b(x), c(x), s1(x), s2(x) 线性化后的证明 和 z(ωx)证明
     def round_5(self) -> Message5:
         group_order = self.group_order
         setup = self.setup
@@ -404,7 +408,6 @@ class Prover:
         # Move pk.QL, pk.QR, pk.QM, pk.QO, pk.QC into the coset extended Lagrange basis
         # Move Z into the coset extended Lagrange basis
         # Move pk.S3 into the coset extended Lagrange basis
-        # 以下是没有在zeta 上打开的部分
         T1_big = self.fft_expand(self.T1)
         T2_big = self.fft_expand(self.T2)
         T3_big = self.fft_expand(self.T3)
@@ -435,10 +438,9 @@ class Prover:
 
         alpha = self.alpha
         v = self.v
-        c_eval = Polynomial([self.c_eval] * group_order * 4, Basis.LAGRANGE)
 
         gate_constraints = (
-            QL_big * self.a_eval
+            QL_big * self.a_eval  #
             + QR_big * self.b_eval
             + QM_big * self.a_eval * self.b_eval
             + QO_big * self.c_eval
@@ -446,6 +448,8 @@ class Prover:
             + QC_big
         )
 
+
+        c_eval = Polynomial([self.c_eval] * group_order * 4, Basis.LAGRANGE)  #将c_value  self.rlc(c_eval, S3_big)
         permutation_constraint = (
             Z_big
             * (
@@ -462,8 +466,7 @@ class Prover:
         )
 
         permutation_first_row = (Z_big - Scalar(1)) * L0_eval
-
-        # R_big的计算中 permutation_constraint 和 permutation_first_row 的位置必须与round3中QUOT_big计算中的位置相同
+        # TODO(keep) R_big的计算中 permutation_constraint 和 permutation_first_row 的位置必须与round3中QUOT_big计算中的位置相同
         R_big = (
             gate_constraints
             + permutation_constraint * alpha
@@ -475,31 +478,31 @@ class Prover:
             ) * ZH_eval
         )
 
-        # 将R 从coset转回来，R_coeffs是多项式的系数表示， R是点值表示
+        # 将R 从coset转回来，R_coeffs是多项式的系数表示，[group_order, 3* group_order)系数为0，R是点值表示
         R_coeffs = self.expanded_evals_to_coeffs(R_big).values
         assert R_coeffs[group_order:] == [0] * (group_order * 3)
         R = Polynomial(R_coeffs[:group_order], Basis.MONOMIAL).fft()
 
         self.R = R
-        setup.commit(R)
+        r_1 = setup.commit(R)
 
         # Sanity-check R
         assert R.barycentric_eval(zeta) == 0
 
         print("Generated linearization polynomial R")
 
+
+        # 提供 在zeta 点 打开a(x), b(x), c(x), s1(x), s2(x), z(ωx)计算的证明
         # Generate proof that W(z) = 0 and that the provided evaluations of
         # A, B, C, S1, S2 are correct
 
         # Move A, B, C into the coset extended Lagrange basis
         # Move pk.S1, pk.S2 into the coset extended Lagrange basis
-
         A_big = self.fft_expand(self.A)
         B_big = self.fft_expand(self.B)
         C_big = self.fft_expand(self.C)
         S1_big = self.fft_expand(self.pk.S1)
         S2_big = self.fft_expand(self.pk.S2)
-
 
         # In the COSET EXTENDED LAGRANGE BASIS,
         # Construct W_Z = (
@@ -510,13 +513,13 @@ class Prover:
         #   + v**4 * (S1 - s1_eval)
         #   + v**5 * (S2 - s2_eval)
         # ) / (X - zeta)
-
         root_of_unity = Scalar.root_of_unity(group_order)
         quarter_roots = Polynomial(
             Scalar.roots_of_unity(group_order * 4), Basis.LAGRANGE
         )
 
-        W_z_big = (
+        # 把r(x), 和 a(x), b(x), c(x), s1(x), s2(x) 计算证明线性合并，得到Q(x)
+        Q_big = (
             R_big
             + (A_big - self.a_eval) * v
             + (B_big - self.b_eval) * v ** 2
@@ -525,26 +528,28 @@ class Prover:
             + (S2_big - self.s2_eval) * v ** 5
         ) / (quarter_roots * self.fft_cofactor - zeta)
 
-        W_z_coeffs = self.expanded_evals_to_coeffs(W_z_big).values
-        assert W_z_coeffs[group_order:] == [0] * (group_order * 3)
-        W_z = Polynomial(W_z_coeffs[:group_order], Basis.MONOMIAL).fft()
+        Q_big_coeffs = self.expanded_evals_to_coeffs(Q_big).values
+        assert Q_big_coeffs[group_order:] == [0] * (group_order * 3)
+        Q = Polynomial(Q_big_coeffs[:group_order], Basis.MONOMIAL).fft()
 
-        # Compute W_z_1 commitment to W_z
-        W_z_1 = setup.commit(W_z)
+        # Compute q_1 commitment to Q
+        q_1 = setup.commit(Q)
+        W_z_1 = q_1
 
         # Generate proof that the provided evaluation of Z(z*w) is correct. This
         # awkwardly different term is needed because the permutation accumulator
         # polynomial Z is the one place where we have to check between adjacent
         # coordinates, and not just within one coordinate.
         # In other words: Compute W_zw = (Z - z_shifted_eval) / (X - zeta * ω)
-        W_zw_big = (Z_big - self.z_shifted_eval) / (
+        ZW_big = (Z_big - self.z_shifted_eval) / (
             quarter_roots * self.fft_cofactor - root_of_unity * zeta
         )
 
-        W_zw_coeffs = self.expanded_evals_to_coeffs(W_zw_big).values
-        assert W_zw_coeffs[group_order:] == [0] * (group_order * 3)
-        W_zw = Polynomial(W_zw_coeffs[:group_order], Basis.MONOMIAL).fft()
-        W_zw_1 = setup.commit(W_zw)
+        ZW_big_coeffs = self.expanded_evals_to_coeffs(ZW_big).values
+        assert ZW_big_coeffs[group_order:] == [0] * (group_order * 3)
+        ZW = Polynomial(ZW_big_coeffs[:group_order], Basis.MONOMIAL).fft()
+        zw_1 = setup.commit(ZW)
+        W_zw_1 = zw_1
 
         print("Generated final quotient witness polynomials")
 
@@ -559,3 +564,4 @@ class Prover:
 
     def rlc(self, term_1, term_2):
         return term_1 + term_2 * self.beta + self.gamma
+
