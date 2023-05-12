@@ -15,7 +15,7 @@ SETUP_FILE_POWERS_POS = 60
 @dataclass
 class Setup(object):
     #   ([1]₁, [x]₁, ..., [x^{d-1}]₁)
-    # = ( G,    xG,  ...,  x^{d-1}G ), where G is a generator of G_2
+    # = ( G,    xG,  ...,  x^{d-1}G ), where G is a generator of G_1
     powers_of_x: list[G1Point]
     # [x]₂ = xH, where H is a generator of G_2
     X2: G2Point
