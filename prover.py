@@ -447,7 +447,7 @@ class Prover:
         )
 
 
-        c_eval = Polynomial([self.c_eval] * group_order * 4, Basis.LAGRANGE)  #将c_value  self.rlc(c_eval, S3_big)
+        c_eval = Polynomial([self.c_eval] * group_order * 4, Basis.LAGRANGE) #将c.eval扩展为self.rlc( ) 相乘所需要的多项式
         permutation_constraint = (
             Z_big
             * (
