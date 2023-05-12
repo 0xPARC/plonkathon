@@ -299,19 +299,15 @@ class Prover:
         group_order = self.group_order
         zeta = self.zeta
 
-        # Compute the "linearization polynomial" R. This is a clever way to avoid
-        # needing to provide evaluations of _all_ the polynomials that we are
-        # checking an equation betweeen: instead, we can "skip" the first
-        # multiplicand in each term. The idea is that we construct a
-        # polynomial which is constructed to equal 0 at Z only if the equations
-        # that we are checking are correct, and which the verifier can reconstruct
-        # the KZG commitment to, and we provide proofs to verify that it actually
-        # equals 0 at Z
-        #
-        # In order for the verifier to be able to reconstruct the commitment to R,
-        # it has to be "linear" in the proof items, hence why we can only use each
-        # proof item once; any further multiplicands in each term need to be
-        # replaced with their evaluations at Z, which do still need to be provided
+       # Compute evaluations to be used in constructing the linearization polynomial.
+
+        # Compute a_eval = A(zeta)
+        # Compute b_eval = B(zeta)
+        # Compute c_eval = C(zeta)
+        # Compute s1_eval = pk.S1(zeta)
+        # Compute s2_eval = pk.S2(zeta)
+        # Compute z_shifted_eval = Z(zeta * ω)
+        
         a_eval = self.A.barycentric_eval(zeta)
         b_eval = self.B.barycentric_eval(zeta)
         c_eval = self.C.barycentric_eval(zeta)
@@ -333,6 +329,20 @@ class Prover:
         group_order = self.group_order
         setup = self.setup
 
+        # Compute the "linearization polynomial" R. This is a clever way to avoid
+        # needing to provide evaluations of _all_ the polynomials that we are
+        # checking an equation betweeen: instead, we can "skip" the first
+        # multiplicand in each term. The idea is that we construct a
+        # polynomial which is constructed to equal 0 at Z only if the equations
+        # that we are checking are correct, and which the verifier can reconstruct
+        # the KZG commitment to, and we provide proofs to verify that it actually
+        # equals 0 at Z
+        #
+        # In order for the verifier to be able to reconstruct the commitment to R,
+        # it has to be "linear" in the proof items, hence why we can only use each
+        # proof item once; any further multiplicands in each term need to be
+        # replaced with their evaluations at Z, which do still need to be provided
+        
         zeta = self.zeta
         L0_ev = Polynomial(
             [Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE
