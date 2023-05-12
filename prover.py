@@ -326,7 +326,7 @@ class Prover:
         T3 = Polynomial(coeffs[2* group_order:3 * group_order], Basis.MONOMIAL).fft()
 
         # Sanity check that we've computed T1, T2, T3 correctly
-        # TODO(keep), 验证商多项式的计算是否正确,QUOT_big.values[0] 对应的x坐标是w^0 = 1, 所以对应到coset的x坐标就是 (offset * 1)
+        # TODO(keep), 验证商多项式的计算是否正确,QUOT_big.values[0] 对应的x坐标是w^0 = 1, 所以对应到coset的x坐标就是 (offset * w^0)
         assert (
             T1.barycentric_eval(fft_cofactor)
             + T2.barycentric_eval(fft_cofactor) * fft_cofactor**group_order
@@ -342,6 +342,9 @@ class Prover:
             + T2.barycentric_eval(w_in_coset) * fft_cofactor ** group_order
             + T3.barycentric_eval(w_in_coset) * fft_cofactor ** (group_order * 2)
         )
+        print(f"fft_cofactor:{fft_cofactor}")
+        print(f"root_of_unity:{root_of_unity}")
+        print(f"w_in_coset:{w_in_coset}")
         print(f"T:{T}")
         print(f"QUO_big.values[1]:{QUOT_big.values[1]}")
 
