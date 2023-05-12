@@ -333,20 +333,15 @@ class Prover:
             + T3.barycentric_eval(fft_cofactor) * fft_cofactor ** (group_order * 2)
         ) == QUOT_big.values[0]
 
+        # TODO(keep), QUOT_big.values[4*i]处验证T的计算是否正确，对应的输入位置是 (offset * w^i)
+        roots_of_unity = Scalar.roots_of_unity(group_order)
+        T = lambda w: T1.barycentric_eval(w) + T2.barycentric_eval(
+            w) * fft_cofactor ** group_order + T3.barycentric_eval(w) * fft_cofactor ** (group_order * 2)
 
-        root_of_unity = Scalar.root_of_unity(group_order)
-        w_in_coset =  fft_cofactor * root_of_unity
-
-        T = (
-            T1.barycentric_eval(w_in_coset)
-            + T2.barycentric_eval(w_in_coset) * fft_cofactor ** group_order
-            + T3.barycentric_eval(w_in_coset) * fft_cofactor ** (group_order * 2)
-        )
-        print(f"fft_cofactor:{fft_cofactor}")
-        print(f"root_of_unity:{root_of_unity}")
-        print(f"w_in_coset:{w_in_coset}")
-        print(f"T:{T}")
-        print(f"QUO_big.values[1]:{QUOT_big.values[1]}")
+        for i in range(len(roots_of_unity)):
+            w_in_coset = fft_cofactor * roots_of_unity[i]
+            T_eval = T(w_in_coset)
+            assert T_eval == QUOT_big.values[4*i]
 
         print("Generated T1, T2, T3 polynomials")
 

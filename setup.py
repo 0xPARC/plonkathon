@@ -73,7 +73,6 @@ class Setup(object):
         if len(coeffs) > len(self.powers_of_x):
             raise Exception("Not enough powers in setup")
         points = [(s, x) for s, x in zip(self.powers_of_x, coeffs)]  #points的格式为 (((s^k).X坐标, (s^k).Y坐标), coeff)
-        print(f"points:{points}\n")
         return ec_lincomb(points)
 
 
