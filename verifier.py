@@ -94,6 +94,12 @@ class VerificationKey:
 
         # Recover the commitment to the linearization polynomial R,
         # exactly the same as what was created by the prover
+        # gate_contraints = (self.A * self.pk.QL
+        #                    + self.B * self.pk.QR
+        #                    + self.A * self.B * self.pk.QM
+        #                    + self.C * self.pk.QO
+        #                    + self.PI
+        #                    + self.pk.QC)
         gate_constraint_point = ec_lincomb(
             [
                 (self.Ql, proof["a_eval"]),
@@ -122,13 +128,33 @@ class VerificationKey:
         # )
         permutation_constraint_point = ec_lincomb(
             [
-                (proof["z_1"], ((proof["a_eval"] + beta * zeta + gamma) * (proof["b_eval"] +beta * 2 * zeta + gamma) * (proof["c_eval"] + beta * 3 * zeta + gamma))),
-                (self.S3, -((proof["a_eval"] + beta * proof["s1_eval"] + gamma) *(proof["b_eval"] + beta  * proof["s2_eval"] +gamma) * beta * proof["z_shifted_eval"])),
-                (b.G1, -((proof["a_eval"] + beta * proof["s1_eval"] + gamma) * (proof["b_eval"] + beta  * proof["s2_eval"] +gamma) * (proof["c_eval"] + gamma) * proof["z_shifted_eval"]))
+                (
+                    proof["z_1"], (
+                        (proof["a_eval"] + beta * zeta + gamma)
+                        * (proof["b_eval"] +beta * 2 * zeta + gamma)
+                        * (proof["c_eval"] + beta * 3 * zeta + gamma)
+                    )
+                ),
+                (
+                    self.S3, -(
+                            (proof["a_eval"] + beta * proof["s1_eval"] + gamma)
+                            * (proof["b_eval"] + beta  * proof["s2_eval"] +gamma)
+                            * beta
+                            * proof["z_shifted_eval"]
+                    )
+                ),
+                (
+                    b.G1, -(
+                        (proof["a_eval"] + beta * proof["s1_eval"] + gamma)
+                        * (proof["b_eval"] + beta  * proof["s2_eval"] + gamma)
+                        * (proof["c_eval"] + gamma)
+                        * proof["z_shifted_eval"]
+                    )
+                ),
             ]
         )
 
-        # permutation_first_row = (Z_big - Scalar(1)) * L0_eval = Z_big * L0_eval + Scalar(1) * L0_eval
+        # permutation_first_row = (Z_big - Scalar(1)) * L0_eval = Z_big * L0_eval - Scalar(1) * L0_eval
         permutation_first_row_point = ec_lincomb(
             [
                 (proof["z_1"], L0_eval),
@@ -150,8 +176,8 @@ class VerificationKey:
         R_pt = ec_lincomb(
             [
                 (gate_constraint_point,1),
-                (permutation_constraint_point,alpha),
-                (permutation_first_row_point,alpha**2),
+                (permutation_constraint_point, alpha),
+                (permutation_first_row_point, alpha**2),
                 (proof["t_lo_1"], -ZH_eval),
                 (proof["t_mid_1"], -ZH_eval*zeta**group_order),
                 (proof["t_hi_1"], -ZH_eval*zeta**(group_order*2))
@@ -173,8 +199,8 @@ class VerificationKey:
         #   + v**4 * (S1 - s1_eval)
         #   + v**5 * (S2 - s2_eval)
         # ) / (X - zeta)
-        # 验证折叠之后的多项式
-        Q_pt = ec_lincomb(
+        # 验证折叠之后的多项式k(x)
+        K_pt = ec_lincomb(
             [
                 (R_pt,1),
                 (proof["a_1"],v),
@@ -183,28 +209,37 @@ class VerificationKey:
                 (b.G1,- v**2 * proof["b_eval"]),
                 (proof["c_1"],v**3),
                 (b.G1,- v**3 * proof["c_eval"]),
-                (self.S1,v**4),
+                (self.S1,v**4),         # 此处不能用proof["s1_eval"]
                 (b.G1,- v**4 * proof["s1_eval"]),
-                (self.S2,v**5),
+                (self.S2,v**5),         # 此处不能用proof["s2_eval"]
                 (b.G1,- v**5 * proof["s2_eval"])
             ]
         )
-        assert b.pairing(b.G2, Q_pt) == b.pairing(b.add(self.X_2, ec_mul(b.G2, -zeta)), proof["W_z_1"])
+        # k(x) = q(x)(x-z)， 需要证明 e([k(x)], [1]) = e([q(x)],[(x-zeta)]) => e([k(x)], [1]) = e([q(x)],[x]-[zeta])
+        assert b.pairing(b.G2, K_pt) == b.pairing(b.add(self.X_2, ec_mul(b.G2, -zeta)), proof["W_z_1"])
         print("done check 1");
 
+        # Verify that the provided value of Z(zeta*w) is correct
+        # ZW_big = (Z_big - self.z_shifted_eval) / (
+        #         quarter_roots * self.fft_cofactor - root_of_unity * zeta
+        #)
+        # e([Z_big]-[self.z_shited_eval], [1]) = e([ZW_big], [x- root_of_unity * zeta])
         root_of_unity = Scalar.root_of_unity(group_order)
         assert b.pairing(
             b.G2, ec_lincomb([(proof["z_1"], 1), (b.G1, -proof["z_shifted_eval"])])
         ) == b.pairing(
             b.add(self.X_2, ec_mul(b.G2, -zeta * root_of_unity)), proof["W_zw_1"]
         )
+
+        assert b.pairing(
+            b.G2, ec_lincomb([(proof["z_1"], 1), (b.G1, -proof["z_shifted_eval"])])
+        ) == b.pairing(
+            b.add(self.X_2, ec_lincomb([(b.G2, -zeta * root_of_unity)])), proof["W_zw_1"]
+        )
+
         print("done check 2")
 
-
-
-        # Verify that the provided value of Z(zeta*w) is correct
-
-        return False
+        return True
 
     # Compute challenges (should be same as those computed by prover)
     def compute_challenges(
