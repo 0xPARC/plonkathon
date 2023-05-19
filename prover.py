@@ -117,6 +117,7 @@ class Prover:
         self.C = Polynomial(C_values,  Basis.LAGRANGE)
 
         # Compute a_1, b_1, c_1 commitments to A, B, C polynomials
+        # round1, prover 计算得到A，B，C commitments
         a_1 = setup.commit(self.A)
         b_1 = setup.commit(self.B)
         c_1 = setup.commit(self.C)
@@ -193,6 +194,7 @@ class Prover:
 
         # List of roots of unity at 4x fineness, i.e. the powers of µ
         # where µ^(4n) = 1
+        # 把roots 扩展到32
         quarter_roots = Scalar.roots_of_unity(group_order*4)
 
         # Using self.fft_expand, move A, B, C into coset extended Lagrange basis
@@ -217,7 +219,7 @@ class Prover:
         print(f"Z_big:{Z_big.values}")
 
         # Expand shifted Z(ω) into coset extended Lagrange basis
-        # 在n root-of-unity上  z(ωx)相当于Z(x) 循环右移1位， 换到4n root-of-unity上就是 z(ωx)相当于Z(x)循环右移4位
+        # TOTO(keep) 在n root-of-unity上  z(ωx)相当于Z(x) 循环右移1位， 换到4n root-of-unity上就是 z(ωx)相当于Z(x)循环右移4位
         Z_shifted_big = Z_big.shift(4)
 
 
@@ -371,6 +373,7 @@ class Prover:
         # Compute s2_eval = pk.S2(zeta)
         # Compute z_shifted_eval = Z(zeta * ω)
 
+        # 直接计算，不在陪集中计算
         a_eval = self.A.barycentric_eval(zeta)
         b_eval = self.B.barycentric_eval(zeta)
         c_eval = self.C.barycentric_eval(zeta)
@@ -485,7 +488,7 @@ class Prover:
         r_1 = setup.commit(R)
 
         # Sanity-check R
-        assert R.barycentric_eval(zeta) == 0
+        assert R.barycentric_eval(zeta) == 0 # TODO(keep)，r(zata) = 0
 
         print("Generated linearization polynomial R")
 

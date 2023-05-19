@@ -92,6 +92,9 @@ def multisubset(numbers, subsets, adder=lambda x, y: x + y, zero=0):
 
 # Reduces a linear combination `numbers[0] * factors[0] + numbers[1] * factors[1] + ...`
 # into a multi-subset problem, and computes the result efficiently
+# factors[i] 为标量，对应为多项式中的系数a0,a1,a2,...
+# number[i] 位曲线上SRS中的点。
+# factors[i] * number[i] 的结果仍然在椭圆曲线上。
 def lincomb(numbers, factors, adder=lambda x, y: x + y, zero=0):
     # Maximum bit length of a number; how many subsets we need to make
     bitlens = [len(bin(f)) - 2 for f in factors] #bin(31) = 0b1111,所以要-2

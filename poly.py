@@ -165,7 +165,7 @@ class Polynomial:
         x_powers = self.ifft().values  # step1: 将多项式的点值形式通过ifft 转换成系数形式(f(x) = a_0+ a_1*x + a_2*x^2 + a_3*x^3 + ...+a_[order-1]*x^(order-1)
         x_powers = [(offset**i * x) for i, x in enumerate(x_powers)] + [Scalar(0)] * (
             group_order * 3
-        ) # step2: 将多项式表示为f'(x) = a_0 + (a_1*offset) *x + (a_2*offsset^2)*x^2 + (a_3*offsset^3)*x^3 + ... +(a_[order-1] * offset^order-1)  *x^(order-1) + 0*x^(order) +....+ 0*x^(4*order-1)
+        ) # step2: 将多项式表示为f'(x) = a_0 + a_1*(offset *x) + a_2*(offsset*x)^2 + a_3*(offsset*x)^3 + ... +a_[order-1] * (offset *x)^(order-1) + 0*x^(order) +....+ 0*x^(4*order-1)
         return Polynomial(x_powers, Basis.MONOMIAL).fft()  # 返回的结果用点值形式表示
 
 

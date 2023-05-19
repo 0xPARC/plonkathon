@@ -72,7 +72,7 @@ class Setup(object):
         coeffs = values.ifft().values
         if len(coeffs) > len(self.powers_of_x):
             raise Exception("Not enough powers in setup")
-        points = [(s, x) for s, x in zip(self.powers_of_x, coeffs)]  #points的格式为 (((s^k).X坐标, (s^k).Y坐标), coeff)
+        points = [(s, x) for s, x in zip(self.powers_of_x, coeffs)]  #points的格式为 (s^k*G, coeff), G 为曲线上的点，coeff 为系数
         return ec_lincomb(points)
 
 
