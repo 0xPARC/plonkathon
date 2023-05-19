@@ -39,18 +39,168 @@ class VerificationKey:
     # efficiently batch them
     def verify_proof(self, group_order: int, pf, public=[]) -> bool:
         # 4. Compute challenges
+        beta, gamma, alpha, zeta, v, u = self.compute_challenges(pf)
+        proof = pf.flatten()
 
         # 5. Compute zero polynomial evaluation Z_H(ζ) = ζ^n - 1
+        ZH_eval = zeta ** group_order - 1
 
         # 6. Compute Lagrange polynomial evaluation L_0(ζ)
+        L0 = Polynomial([Scalar(1)] + [Scalar(0)] * (group_order - 1), Basis.LAGRANGE)
+        L0_eval = L0.barycentric_eval(zeta)
 
         # 7. Compute public input polynomial evaluation PI(ζ).
+        PI = Polynomial(
+            [Scalar(-v) for v in public]
+            + [Scalar(0) for _ in range(self.group_order - len(public))],
+            Basis.LAGRANGE,
+        )
+        PI_eval = PI.barycentric_eval(zeta)
 
         # Compute the constant term of R. This is not literally the degree-0
         # term of the R polynomial; rather, it's the portion of R that can
         # be computed directly, without resorting to elliptic cutve commitments
+        # R_pt = ec_lincomb(
+        #     [
+        #         # gate_constraint_point
+        #         (self.Ql, proof["a_eval"]),
+        #         (self.Qr, proof["b_eval"]),
+        #         (self.Qm, proof["a_eval"] * proof["b_eval"]),
+        #         (self.Qo, proof["c_eval"]),
+        #         (b.G1, PI_eval), # 常数项
+        #         (self.Qc, 1),
+        #
+        #         # permutation_constraint_point
+        #         (
+        #             proof["z_1"], (
+        #                     (proof["a_eval"] + beta * zeta + gamma)
+        #                     * (proof["b_eval"] + beta * 2 * zeta + gamma)
+        #                     * (proof["c_eval"] + beta * 3 * zeta + gamma)
+        #                     * alpha
+        #             )
+        #         ),
+        #         (
+        #             self.S3, -(
+        #                     (proof["a_eval"] + beta * proof["s1_eval"] + gamma)
+        #                     * (proof["b_eval"] + beta * proof["s2_eval"] + gamma)
+        #                     * beta
+        #                     * proof["z_shifted_eval"]
+        #                     * alpha
+        #             )
+        #         ),
+        #         (
+        #             b.G1, -(
+        #                     (proof["a_eval"] + beta * proof["s1_eval"] + gamma)
+        #                     * (proof["b_eval"] + beta * proof["s2_eval"] + gamma)
+        #                     * (proof["c_eval"] + gamma)
+        #                     * proof["z_shifted_eval"]
+        #                     * alpha
+        #             )  #常数项
+        #         ),
+        #
+        #         # permutation_first_row point
+        #         (proof["z_1"], L0_eval * alpha **2),
+        #         (b.G1, -L0_eval * alpha **2),  #常数项
+        #
+        #         # t1/t2/t3
+        #         (proof["t_lo_1"], -ZH_eval),
+        #         (proof["t_mid_1"], -ZH_eval*zeta**group_order),
+        #         (proof["t_hi_1"], -ZH_eval*zeta**(group_order*2))
+        #     ]
+        # )
+
+        # Step8, 分离常数项。常数项为未优化版本中形如(G1, 系数的项)。
+        r0 = (
+            PI_eval
+            - L0_eval * alpha **2
+            - (
+                (proof["a_eval"] + beta * proof["s1_eval"] + gamma)
+                * (proof["b_eval"] + beta * proof["s2_eval"] + gamma)
+                * (proof["c_eval"] + gamma)
+                * proof["z_shifted_eval"]
+                * alpha
+            )
+        )
+
 
         # Compute D = (R - r0) + u * Z, and E and F
+        #Step9,D_point 为未优化版本的R_pt 减去常数项的部分
+        D_pt = ec_lincomb(
+            [
+                # gate_constraint_point
+                (self.Ql, proof["a_eval"]),
+                (self.Qr, proof["b_eval"]),
+                (self.Qm, proof["a_eval"] * proof["b_eval"]),
+                (self.Qo, proof["c_eval"]),
+                # (b.G1, PI_eval), # 常数项
+                (self.Qc, 1),
+
+                # permutation_constraint_point
+                (
+                    proof["z_1"], (
+                            (proof["a_eval"] + beta * zeta + gamma)
+                            * (proof["b_eval"] + beta * 2 * zeta + gamma)
+                            * (proof["c_eval"] + beta * 3 * zeta + gamma)
+                            * alpha
+                            + u
+                    )
+                ),
+                (
+                    self.S3, -(
+                            (proof["a_eval"] + beta * proof["s1_eval"] + gamma)
+                            * (proof["b_eval"] + beta * proof["s2_eval"] + gamma)
+                            * beta
+                            * proof["z_shifted_eval"]
+                            * alpha
+                    )
+                ),
+                # (
+                #     b.G1, -(
+                #             (proof["a_eval"] + beta * proof["s1_eval"] + gamma)
+                #             * (proof["b_eval"] + beta * proof["s2_eval"] + gamma)
+                #             * (proof["c_eval"] + gamma)
+                #             * proof["z_shifted_eval"]
+                #             * alpha
+                #     )
+                # ), #常数项
+
+                # permutation_first_row point
+                (proof["z_1"], L0_eval * alpha **2),
+                #(b.G1, -L0_eval * alpha **2),  #常数项
+
+                # t1/t2/t3
+                (proof["t_lo_1"], -ZH_eval),
+                (proof["t_mid_1"], -ZH_eval*zeta**group_order),
+                (proof["t_hi_1"], -ZH_eval*zeta**(group_order*2))
+            ]
+        )
+
+        #Step10, 计算F_pt
+        F_pt = ec_lincomb(
+            [
+                (D_pt, 1),
+                (proof["a_1"],v),
+                (proof["b_1"], v**2),
+                (proof["c_1"], v**3),
+                (self.S1, v**4),
+                (self.S2, v ** 5),
+            ]
+        )
+
+        #step11, 计算E_pt
+        E_coeff = (-r0
+                   + v * proof["a_eval"]
+                   + v**2 * proof["b_eval"]
+                   + v**3 * proof["c_eval"]
+                   + v**4 * proof["s1_eval"]
+                   + v**5 * proof["s2_eval"]
+                   + u *proof["z_shifted_eval"]
+                   )
+
+
+        E_pt = ec_lincomb([(b.G1, E_coeff)])
+
+
 
         # Run one pairing check to verify the last two checks.
         # What's going on here is a clever re-arrangement of terms to check
@@ -68,8 +218,23 @@ class VerificationKey:
         #
         # so at this point we can take a random linear combination of the two
         # checks, and verify it with only one pairing.
+        root_of_unity = Scalar.root_of_unity(group_order)
 
-        return False
+        assert b.pairing(
+                self.X_2, ec_lincomb([(proof["W_z_1"], 1), (proof["W_zw_1"], u)])
+        ) == b.pairing(
+            b.G2,
+            ec_lincomb(
+                [
+                    (proof["W_z_1"], zeta),
+                    (proof["W_zw_1"], u * zeta * root_of_unity),
+                    (F_pt,1),
+                    (E_pt,-1)
+                ]
+            )
+        )
+
+        return True
 
     # Basic, easier-to-understand version of what's going on
     def verify_proof_unoptimized(self, group_order: int, pf, public=[]) -> bool:
