@@ -368,6 +368,10 @@ class Prover:
         # replaced with their evaluations at Z, which do still need to be provided
 
         # Commit to R
+        self.QL_big, self.QR_big, self.QM_big, self.QO_big, self.QC_big  = (
+            self.fft_expand(x) for x in (self.pk.QL, self.pk.QR,self.pk.QM, self.pk.QO, self.pk.QC)
+            )
+            
         R_big = Polynomial([(
             self.a_eval * self.QL_big.values[i] +
             self.b_eval * self.QR_big.values[i] +
