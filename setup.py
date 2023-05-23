@@ -61,6 +61,16 @@ class Setup(object):
         # assert b.pairing(b.G2, powers_of_x[1]) == b.pairing(X2, b.G1)
         # print("X^1 points checked consistent")
         return cls(powers_of_x, X2)
+    
+    # Encodes the KZG commitment to the given polynomial coeffs
+    def coeffs_to_point(self, coeffs):
+        if len(coeffs) > len(self.powers_of_x):
+            raise Exception("Not enough powers in setup")
+        return ec_lincomb([(s, x) for s, x in zip(self.powers_of_x, coeffs)])
+
+    # Encodes the KZG commitment that evaluates to the given values in the group
+    def evaluations_to_point(self, evals):
+        return self.coeffs_to_point(evals.ifft().values)
 
     # Encodes the KZG commitment that evaluates to the given values in the group
     def commit(self, values: Polynomial) -> G1Point:
@@ -69,9 +79,24 @@ class Setup(object):
         # Run inverse FFT to convert values from Lagrange basis to monomial basis
         # Optional: Check values size does not exceed maximum power setup can handle
         # Compute linear combination of setup with values
-        return NotImplemented
+        
+        return self.evaluations_to_point(values)
 
     # Generate the verification key for this program with the given setup
     def verification_key(self, pk: CommonPreprocessedInput) -> VerificationKey:
         # Create the appropriate VerificationKey object
-        return NotImplemented
+        
+        vk = VerificationKey(
+            Qm=self.evaluations_to_point(pk.QM),
+            Ql=self.evaluations_to_point(pk.QL),
+            Qr=self.evaluations_to_point(pk.QR),
+            Qo=self.evaluations_to_point(pk.QO),
+            Qc=self.evaluations_to_point(pk.QC),
+            S1=self.evaluations_to_point(pk.S1),
+            S2=self.evaluations_to_point(pk.S2),
+            S3=self.evaluations_to_point(pk.S3),
+            X_2=self.X2,
+            group_order=pk.group_order,
+            w=Scalar(Scalar.root_of_unity(pk.group_order))
+        )
+        return vk
