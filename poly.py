@@ -183,6 +183,9 @@ class Polynomial:
 
         order = len(self.values)
         roots_of_unity = Scalar.roots_of_unity(order)
+        elem = x.n % Scalar.field_modulus
+        if elem in roots_of_unity:
+            return self.values[roots_of_unity.index(elem)]
         return (
             (Scalar(x) ** order - 1)
             / order
