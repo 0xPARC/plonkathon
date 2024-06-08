@@ -13,14 +13,17 @@ class Scalar(Field):
     # Gets the first root of unity of a given group order
     @classmethod
     def root_of_unity(cls, group_order: int):
-        return Scalar(5) ** ((cls.field_modulus - 1) // group_order)
+        # field_modulus = 21888242871839275222246405745257275088548364400416034343698204186575808495617
+        val = Scalar(5) ** ((cls.field_modulus - 1) // group_order) # 对于order=2^k次方电路，该方式产生的单位方根都满足w * w^(order-1) = 1
+        return val
 
     # Gets the full list of roots of unity of a given group order
     @classmethod
     def roots_of_unity(cls, group_order: int):
         o = [Scalar(1), cls.root_of_unity(group_order)]
         while len(o) < group_order:
-            o.append(o[-1] * o[1])
+            val = o[-1] * o[1] #[1, w, w^2] => [1, w, w^2, w^3] w*w^2=w^3
+            o.append(val)
         return o
 
 
@@ -35,10 +38,11 @@ def ec_mul(pt, coeff):
 
 # Elliptic curve linear combination. A truly optimized implementation
 # would replace this with a fast lin-comb algo, see https://ethresear.ch/t/7238
+#https://ethresear.ch/t/simple-guide-to-fast-linear-combinations-aka-multiexponentiations/7238
 def ec_lincomb(pairs):
     return lincomb(
-        [pt for (pt, _) in pairs],
-        [int(n) % b.curve_order for (_, n) in pairs],
+        [pt for (pt, _) in pairs],  #numbers
+        [int(n) % b.curve_order for (_, n) in pairs], # 1，s*G，s^2*G, s^3 *G
         b.add,
         b.Z1,
     )
@@ -88,9 +92,14 @@ def multisubset(numbers, subsets, adder=lambda x, y: x + y, zero=0):
 
 # Reduces a linear combination `numbers[0] * factors[0] + numbers[1] * factors[1] + ...`
 # into a multi-subset problem, and computes the result efficiently
+# factors[i] 为标量，对应为多项式中的系数a0,a1,a2,...
+# number[i] 位曲线上SRS中的点。
+# factors[i] * number[i] 的结果仍然在椭圆曲线上。
 def lincomb(numbers, factors, adder=lambda x, y: x + y, zero=0):
     # Maximum bit length of a number; how many subsets we need to make
-    maxbitlen = max(len(bin(f)) - 2 for f in factors)
+    bitlens = [len(bin(f)) - 2 for f in factors] #bin(31) = 0b1111,所以要-2
+
+    maxbitlen = max(bitlens)
     # Compute the subsets: the ith subset contains the numbers whose corresponding factor
     # has a 1 at the ith bit
     subsets = [
@@ -147,6 +156,7 @@ def test_lincomb(numcount, bitlength=256):
         "Optimization factor: %.2f"
         % ((bitlength * numcount + total_ones) / (bitlength * 2 + counter[0]))
     )
+
 
 
 if __name__ == "__main__":

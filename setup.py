@@ -16,6 +16,11 @@ SETUP_FILE_POWERS_POS = 60
 class Setup(object):
     #   ([1]₁, [x]₁, ..., [x^{d-1}]₁)
     # = ( G,    xG,  ...,  x^{d-1}G ), where G is a generator of G_2
+    # =
+    # f(x) = 5 + 20x + 10x^2
+    # hash(5, 20, 10)
+    # [f(x)] =
+    # a0G + a1[xG] + a2[x^2*G]
     powers_of_x: list[G1Point]
     # [x]₂ = xH, where H is a generator of G_2
     X2: G2Point
@@ -63,15 +68,33 @@ class Setup(object):
         return cls(powers_of_x, X2)
 
     # Encodes the KZG commitment that evaluates to the given values in the group
+    # 接受多项式的LAGRANGE形式并转换成系数形式，在形成commitment
     def commit(self, values: Polynomial) -> G1Point:
         assert values.basis == Basis.LAGRANGE
 
         # Run inverse FFT to convert values from Lagrange basis to monomial basis
         # Optional: Check values size does not exceed maximum power setup can handle
         # Compute linear combination of setup with values
-        return NotImplemented
+        coeffs = values.ifft().values
+        if len(coeffs) > len(self.powers_of_x):
+            raise Exception("Not enough powers in setup")
+        points = [(s, x) for s, x in zip(self.powers_of_x, coeffs)]  #points的格式为 (s^k*G, coeff), G 为曲线上的点，coeff 为系数
+        return ec_lincomb(points)
+
 
     # Generate the verification key for this program with the given setup
     def verification_key(self, pk: CommonPreprocessedInput) -> VerificationKey:
         # Create the appropriate VerificationKey object
-        return NotImplemented
+        return VerificationKey(
+            pk.group_order,
+            self.commit(pk.QM),
+            self.commit(pk.QL),
+            self.commit(pk.QR),
+            self.commit(pk.QO),
+            self.commit(pk.QC),
+            self.commit(pk.S1),
+            self.commit(pk.S2),
+            self.commit(pk.S3),
+            self.X2,
+            Scalar.root_of_unity(pk.group_order),
+        )
