@@ -2,12 +2,28 @@
 **PlonKathon** is part of the program for [MIT IAP 2023] [Modern Zero Knowledge Cryptography](https://zkiap.com/). Over the course of this weekend, we will get into the weeds of the PlonK protocol through a series of exercises and extensions. This repository contains a simple python implementation of PlonK adapted from [py_plonk](https://github.com/ethereum/research/tree/master/py_plonk), and targeted to be close to compatible with the implementation at https://zkrepl.dev.
 
 ### Exercises
-#### Prover
+
+Each step of the exercise is accompanied by tests in `test.py` to check your progress.
+
+#### Step 1: Implement setup.py
+
+Implement `Setup.commit` and `Setup.verification_key`.
+
+#### Step 2: Implement prover.py
+
 1. Implement Round 1 of the PlonK prover
 2. Implement Round 2 of the PlonK prover
 3. Implement Round 3 of the PlonK prover
 4. Implement Round 4 of the PlonK prover
 5. Implement Round 5 of the PlonK prover
+
+#### Step 3: Implement verifier.py
+
+Implement `VerificationKey.verify_proof_unoptimized` and `VerificationKey.verify_proof`. See the comments for the differences.
+
+#### Step 4: Pass all the tests!
+
+Pass a number of miscellaneous tests that test your implementation end-to-end.
 
 ### Extensions
 1. Add support for custom gates.
@@ -16,14 +32,46 @@
 The parts of PlonK that are responsible for ensuring strong privacy are left out of this implementation. See if you can identify them in the [original paper](https://eprint.iacr.org/2019/953.pdf) and add them here.
 3. Add support for lookups.
 A lookup argument allows us to prove that a certain element can be found in a public lookup table. [PlonKup](https://eprint.iacr.org/2022/086.pdf) introduces lookup arguments to PlonK. Try to understand the construction in the paper and implement it here.
+4. Implement Merlin transcript.
+Currently, this implementation uses the [merlin transcript package](https://github.com/nalinbhardwaj/curdleproofs.pie/tree/master/merlin). Learn about the [Merlin transcript construction](https://merlin.cool) and the [STROBE framework](https://www.cryptologie.net/article/416/the-strobe-protocol-framework/) which Merlin is based upon, and then implement the transcript class `MerlinTranscript` yourself!
 
 ## Getting started
 
-To get started, you'll need to have a Python version >= 3.8 and [`poetry`](https://python-poetry.org) installed: `curl -sSL https://install.python-poetry.org | python3 -`.
+To get started, you'll need to have Python version >= 3.9 installed.  You'll also need to install two packages: `py-ecc` and `merlin-transcripts`.
 
-Then, run `poetry install` in the root of the repository. This will install all the dependencies in a virtualenv.
+### Optional but recommended: set up a virtual environment
 
-Then, to see the proof system in action, run `poetry run python test.py` from the root of the repository. This will take you through the workflow of setup, proof generation, and verification for several example programs.
+If you're going to work with a lot of different Python projects, you will want to keep separate Python "virtual environments" for each project.  A virtual environment is simply a folder containing a Python interpreter and any dependencies you need for that project.  When you start a new project, you create a fresh virtual environment, so you only install the packages you need.
+
+For dependency management, you can use `conda`.  We suggest installing Miniconda, following the directions at [Miniconda](https://docs.anaconda.com/miniconda/).
+
+Once you have installed conda, create a new environment `plonkathon` that runs Python version 3.9 by running `conda create --name plonkathon python=3.9`.
+
+Then type `conda activate plonkathon` to activate your new environment.  You should see `(plonkathon)` next to your shell prompt.
+
+If you want to see all your environments, you can run `conda env list`.  If you started from a fresh conda install, you should see `base` and `plonkathon`, and it should show that `plonkathon` is active.
+
+To learn more about Python virtual environments, take a look at `https://csguide.cs.princeton.edu/software/virtualenv`.
+
+### Required: install dependencies
+
+You'll use `pip`, the Python package installer, to install the dependencies.  Make sure to activate the `plonkathon` virtual environment, then run
+`pip install py-ecc`
+and then
+`pip install merlin-transcripts`.
+
+If you want to check that the installation worked, type
+`python`
+to open the command-line Python interpreter. Run `>>> import py_ecc`.  If `py-ecc` has installed successfully, it will run for a second or two, then give you a new prompt `>>>`.  If not, the Python interpreter will show a `ModuleNotFoundError`.  Then run `>>> import merlin_transcripts` to check that `merlin-transcripts` installed as well.
+
+Notice the difference between the package name `py-ecc` with a hyphen and the module name `py_ecc` with an underscore.
+
+### Back to proofs
+
+Now that your Python dependencies are up and running, run `python test.py` from the root of the repository. This will take you through the workflow of setup, proof generation, and verification for several example programs.
+
+The `main` branch contains code stubbed out with comments to guide you through the tests. The `hardcore` branch removes the comments for the more adventurous amongst you. The `reference` branch contains a completed implementation.
+
 ### Compiler
 #### Program
 We specify our program logic in a high-level language involving constraints and variable assignments. Here is a program that lets you prove that you know two small numbers that multiply to a given number (in our example we'll use 91) without revealing what those numbers are:
@@ -251,4 +299,4 @@ The `VerificationKey` contains:
 | $[S_{\sigma2}(x)]_1$     | commitment to the second permutation polynomial $S_{\sigma2}(X)$ |
 | $[S_{\sigma3}(x)]_1$     | commitment to the third permutation polynomial $S_{\sigma3}(X)$  |
 | $[x]_2 = xH$             | (from the $\mathsf{srs}$)                                        |
-| $\omega$                 | an $n$-th root of unity, where $n$ is the program's group order.  |
+| $\omega$                 | an $n$-th root of unity, where $n$ is the program's group order. |

@@ -1,6 +1,6 @@
 from utils import Scalar
 from curve import G1Point
-from merlin import MerlinTranscript
+from merlin_transcripts import MerlinTranscript
 from py_ecc.secp256k1.secp256k1 import bytes_to_int
 from dataclasses import dataclass
 
