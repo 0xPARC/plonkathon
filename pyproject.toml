@@ -14,6 +14,7 @@ merlin = {git = "https://github.com/nalinbhardwaj/curdleproofs.pie", rev = "mast
 [tool.poetry.group.dev.dependencies]
 mypy = "^0.991"
 black = "^22.12.0"
+setuptools = "^75.8.0"
 
 [build-system]
 requires = ["poetry-core"]
